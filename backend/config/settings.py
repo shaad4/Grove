@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     "apps.clients",
     "apps.plans",
     "apps.tenants",
+    "apps.notifications",
+    
 
 ]
 
