@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from notifications.tasks import send_verification_email
+from apps.notifications.tasks import send_verification_email
 from .serializers import ProviderSignupSerializer
 
 
@@ -27,7 +27,7 @@ class ProviderSignupView(APIView):
     """
 
     permission_classes = [AllowAny]
-    throttle_classes = "signup"
+    # throttle_classes = "signup"
 
     def post(self, request):
         serializer = ProviderSignupSerializer(data=request.data)

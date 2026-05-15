@@ -29,7 +29,7 @@ DEBUG = config("DEBUG", cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost").split(",")
 
-
+AUTH_USER_MODEL = "users.User"
 
 # Application definition
 
@@ -53,7 +53,7 @@ INSTALLED_APPS = [
     "apps.plans",
     "apps.tenants",
     "apps.notifications",
-    
+
 
 ]
 
@@ -168,7 +168,7 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
     ),
-    "EXCEPTION_HANDLER": "core.exceptions.grove_exception_handler",
+    "EXCEPTION_HANDLER": "config.exceptions.grove_exception_handler",
 }
 
 
@@ -185,7 +185,8 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 
 # Email
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = config("EMAIL_PORT", cast=int, default=587)
 EMAIL_USE_TLS = True

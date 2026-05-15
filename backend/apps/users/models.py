@@ -37,7 +37,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         null=True, blank=True, related_name="users"
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PROVIDER)
-    email = models.EmailField()
+    email = models.EmailField(unique=True)
     display_name = models.CharField(max_length=255)
     avatar_url = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)

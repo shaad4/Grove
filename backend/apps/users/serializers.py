@@ -1,9 +1,9 @@
 import re
 from django.db import transaction
 from rest_framework import serializers
-from tenants.models import Tenant, Plan, TenantUsage
+from apps.tenants.models import Tenant, Plan, TenantUsage
 from .models import User, EmailVerificationToken
-
+from django.utils import timezone
 
 
 
@@ -18,7 +18,7 @@ class ProviderSignupSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(min_length=8, write_only = True)
 
-    buisness_name = serializers.CharField(min_length=2, max_length=255)
+    business_name = serializers.CharField(min_length=2, max_length=255)
     slug = serializers.CharField(min_length=3, max_length=63)
 
     #validations
@@ -38,7 +38,7 @@ class ProviderSignupSerializer(serializers.Serializer):
                 f'"{value}" is a reserved name and cannot be used.'
             )
         
-        if Tenant.objects.filter(slug=slug).exists():
+        if Tenant.objects.filter(slug=value).exists():
             raise serializers.ValidationError(
                 "This workspace URL is already taken. Please choose another."
             )
@@ -46,52 +46,52 @@ class ProviderSignupSerializer(serializers.Serializer):
         return value
     
 
-def validate_email(self, value):
-    value = value.lower().strip()
+    def validate_email(self, value):
+        value = value.lower().strip()
 
-    if User.objects.filter(email=value, role=User.Role.PROVIDER).exists():
-        raise serializers.ValidationError(
-            "An account with this email already exists."
+        if User.objects.filter(email=value, role=User.Role.PROVIDER).exists():
+            raise serializers.ValidationError(
+                "An account with this email already exists."
+            )
+        return value
+
+    def validate_password(self, value):
+        if value.isdigit():
+            raise serializers.ValidationError(
+                "Password cannot be entirely numeric."
+            )
+        return value
+
+
+    #create
+
+    @transaction.atomic
+    def create(self, validated_data):
+        """
+            Creates Tenant + User + TenantUsage in a single DB transaction.
+            Returns user and tenant instances — token generation happens in the view.
+        """
+        free_plan = Plan.objects.get(name="free")
+
+        tenant = Tenant.objects.create(
+            plan=free_plan,
+            name=validated_data["business_name"],
+            slug=validated_data["slug"],
+        ) 
+
+        TenantUsage.objects.create(tenant=tenant)
+
+        user = User.objects.create_user(
+            email = validated_data["email"],
+            password = validated_data["password"],
+            tenant=tenant,
+            role=User.Role.PROVIDER,
+            display_name=validated_data["display_name"],
         )
-    return value
 
-def validate_password(self, value):
-    if value.isdigit():
-        raise serializers.ValidationError(
-            "Password cannot be entirely numeric."
+        verification_token = EmailVerificationToken.objects.create(
+            user = user,
+            expires_at=timezone.now() + timezone.timedelta(hours=24),
         )
-    return value
 
-
-#create
-
-@transaction.atomic
-def create(self, validated_data):
-    """
-        Creates Tenant + User + TenantUsage in a single DB transaction.
-        Returns user and tenant instances — token generation happens in the view.
-    """
-    free_plan = Plan.objects.get(name="free")
-
-    tenant = Tenant.objects.create(
-        plan=free_plan,
-        name=validated_data["business_name"],
-        slug=validated_data["slug"],
-    ) 
-
-    TenantUsage.objects.create(tenant=tenant)
-
-    user = User.objects.create_user(
-        email = validate_data["email"]
-        password = validated_data["password"]
-        tenant=tenant,
-        role=User.Role.PROVIDER,
-        display_name=validated_data["display_name"],
-    )
-
-    verification_token = EmailVerificationToken.objects.create(
-        user = user,
-        expires_at=timezone.now() + timezone.timedelta(hours=24),
-    )
-
-    return {"user": user, "tenant": tenant, "verification_token": verification_token}
+        return {"user": user, "tenant": tenant, "verification_token": verification_token}

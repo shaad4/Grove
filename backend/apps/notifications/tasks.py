@@ -3,8 +3,8 @@ from django.conf import settings
 from django.core.mail import send_mail
 
 
-@shared_task(blind=True, max_retries=3, default_retry_delay=60)
-def send_verification_email(self, user_email: str, display_name: str, token: str):
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_verification_email(self, user_email, display_name, token):
     """
     Sends email verification link to a newly registered provider.
     Retries up to 3 times on failure with 60s delay.
