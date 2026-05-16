@@ -87,6 +87,8 @@ class ProviderSignupSerializer(serializers.Serializer):
             tenant=tenant,
             role=User.Role.PROVIDER,
             display_name=validated_data["display_name"],
+            is_active = False,
+            
         )
 
         verification_token = EmailVerificationToken.objects.create(

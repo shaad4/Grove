@@ -7,12 +7,12 @@ from apps.tenants.models import Tenant
 # Create your models here.
 
 class UserManager(BaseUserManager):
-    def create_user(self, email, password, tenant=None, role="provider", **extra):
+    def create_user(self, email, password, tenant=None, role="provider", is_active=False, **extra):
         if not email:
             raise ValueError("Email is required.")
         
         email = self.normalize_email(email)
-        user = self.model(email=email, tenant=tenant, role=role, **extra)
+        user = self.model(email=email, tenant=tenant, role=role, is_active=is_active, **extra)
         user.set_password(password)
         user.save(using=self._db)
         return user
