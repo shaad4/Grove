@@ -243,3 +243,6 @@ class CheckSlugAPIView(APIView):
         return Response({
             "available": not exists
         })
+    
+
+

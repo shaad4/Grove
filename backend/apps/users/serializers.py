@@ -2,12 +2,11 @@ import re
 from django.db import transaction
 from rest_framework import serializers
 from .models import User, EmailVerificationToken
-from apps.tenants.models import (
-    Tenant,
-    Plan,
-    TenantUsage,
-)
+from apps.tenants.models import Tenant
 from django.utils import timezone
+from django.contrib.auth import authenticate
+
+
 
 
 
@@ -119,3 +118,48 @@ class WorkspaceSetupSerializer(serializers.Serializer):
             )
         
         return value
+
+
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+
+    
+
+    def validate(self, data):
+        email = data.get('email').lower().strip()
+        password = data.get('password')
+
+        user = authenticate(
+            request= self.context.get('request'),
+            username = email,
+            password = password
+        )
+
+        if not user:
+            raise serializers.ValidationError(
+                "Invalid Email or Password"
+            )
+        
+        if not user.is_active:
+            raise serializers.ValidationError(
+                "This account as been deactivated"
+            )
+        
+        if not user.is_email_verified:
+            raise serializers.ValidationError(
+                "Please verify your email before logging in."
+            )
+        
+        if user.role != 'provider':
+            raise serializers.ValidationError(
+                "Invalid Credentials."
+            )
+        
+        data['user'] = user
+        return data
+    
+    
+
+
+        

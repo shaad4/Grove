@@ -5,19 +5,20 @@ import { ProtectedRoute, GuestRoute } from './routes/ProtectedRoute'
 
 import ErrorBoundary from './ErrorBoundary'
 
+import LandingPage from './pages/LandingPage'
 import SignupPage from './pages/SignupPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage'
 
 // temporary placeholders
 const LoginPage = () => (
-  <div className="p-8 text-text-main">
+  <div className="min-h-screen flex items-center justify-center text-text-main">
     Login — next step
   </div>
 )
 
 const DashboardPage = () => (
-  <div className="p-8 text-text-main">
+  <div className="min-h-screen flex items-center justify-center text-text-main">
     Dashboard — next step
   </div>
 )
@@ -29,6 +30,12 @@ export default function App() {
         <AuthProvider>
 
           <Routes>
+
+            {/* PUBLIC LANDING PAGE */}
+            <Route
+              path="/"
+              element={<LandingPage />}
+            />
 
             {/* GUEST ROUTES */}
             <Route element={<GuestRoute />}>
@@ -65,10 +72,10 @@ export default function App() {
 
             </Route>
 
-            {/* DEFAULT */}
+            {/* 404 FALLBACK */}
             <Route
               path="*"
-              element={<Navigate to="/signup" replace />}
+              element={<Navigate to="/" replace />}
             />
 
           </Routes>
@@ -78,3 +85,4 @@ export default function App() {
     </ErrorBoundary>
   )
 }
+
