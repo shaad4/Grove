@@ -9,13 +9,9 @@ import LandingPage from './pages/LandingPage'
 import SignupPage from './pages/SignupPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage'
+import LoginPage from './pages/LoginPage'
 
 // temporary placeholders
-const LoginPage = () => (
-  <div className="min-h-screen flex items-center justify-center text-text-main">
-    Login — next step
-  </div>
-)
 
 const DashboardPage = () => (
   <div className="min-h-screen flex items-center justify-center text-text-main">
