@@ -1,5 +1,5 @@
 from django.shortcuts import render
-from .models import EmailVerificationToken
+from .models import EmailVerificationToken, PasswordResetToken, User
 import uuid
 
 # Create your views here.
@@ -10,9 +10,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.notifications.tasks import send_verification_email
-from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer
+from apps.notifications.tasks import send_verification_email, send_password_reset_email
+from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer, LoginSerializer, ForgetPasswordSerializer, ResetPasswordSerializer
 from apps.tenants.models import Tenant,Plan,TenantUsage
+from django.contrib.auth.models import update_last_login
 
 
 from django.utils import timezone
@@ -246,3 +247,118 @@ class CheckSlugAPIView(APIView):
     
 
 
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = LoginSerializer(
+            data = request.data,
+            context={'request' : request}
+        )
+
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        user =serializer.validated_data['user']
+
+        update_last_login(None, user)
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'display_name': user.display_name,
+                'role': user.role,
+                'tenant_id': str(user.tenant_id) if user.tenant_id else None,
+            }
+        }, status=status.HTTP_200_OK)
+    
+
+
+class ForgotPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ForgetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data['email']
+
+        try:
+            user = User.objects.get(
+                email=email,
+                is_active=True,
+                role='provider'
+            )
+        except User.DoesNotExist:
+            return Response({
+                'success' : True,
+                'message' : "If this email is registered, a reset link has been sent."
+            })
+
+        PasswordResetToken.objects.filter(
+            user=user,
+            status=PasswordResetToken.Status.PENDING
+        ).update(status=PasswordResetToken.Status.EXPIRED)
+
+
+        reset_token = PasswordResetToken.objects.create(
+            user=user,
+            expires_at=timezone.now() + timezone.timedelta(minutes=30)
+        )
+
+        return Response({
+            'success' : True,
+            'message' : 'If this email is registered, a reset link has been sent.'
+        })
+    
+
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data = request.data)
+        serializer.is_valid(raise_exception=True)
+
+        token_value = serializer.validated_data['token']
+        new_password = serializer.validated_data['password']
+
+        try:
+            reset_token = PasswordResetToken.objects.select_related('user').get(
+                token=token_value,
+                status=PasswordResetToken.Status.PENDING
+            )
+        except PasswordResetToken.DoesNotExist:
+            return Response(
+                {'success': False, 'message': 'Invalid or expired reset link.'},
+                status=400
+            )
+
+        if reset_token.expires_at < timezone.now():
+            reset_token.status = PasswordResetToken.Status.EXPIRED
+            reset_token.save()
+            return Response(
+                {'success': False, 'message': 'Reset link has expired. Please request a new one.'},
+                status=400
+            )
+        
+        user = reset_token.user
+        user.set_password(new_password)
+        user.save()
+
+        reset_token.status = PasswordResetToken.Status.USED
+        reset_token.used_at = timezone.now()
+        reset_token.save()
+
+        return Response({
+            'success' : True,
+            'message' : "Password reset successfully."
+        })

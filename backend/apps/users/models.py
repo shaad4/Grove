@@ -91,3 +91,31 @@ class EmailVerificationToken(models.Model):
     def __str__(self):
         return f"Token for {self.user.email} [{self.status}]"
     
+
+
+class PasswordResetToken(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        USED    = "used"
+        EXPIRED = "expired"
+
+    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_reset_tokens")
+    token      = models.UUIDField(default=uuid.uuid4, unique=True)
+    status     = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    expires_at = models.DateTimeField()
+    used_at    = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "password_reset_tokens"
+
+        indexes = [
+            models.Index(fields=["token"],      name="idx_prt_token"),
+            models.Index(fields=["user"],       name="idx_prt_user"),
+            models.Index(fields=["status"],     name="idx_prt_status"),
+            models.Index(fields=["expires_at"], name="idx_prt_expires"),
+        ]
+
+    def __str__(self):
+        return f"PasswordResetToken for {self.user.email} [{self.status}]"

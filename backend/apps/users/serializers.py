@@ -1,10 +1,11 @@
 import re
 from django.db import transaction
 from rest_framework import serializers
-from .models import User, EmailVerificationToken
+from .models import User, EmailVerificationToken, PasswordResetToken
 from apps.tenants.models import Tenant
 from django.utils import timezone
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
 
 
 
@@ -159,7 +160,21 @@ class LoginSerializer(serializers.Serializer):
         data['user'] = user
         return data
     
+
+
+
+class ForgetPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.lower().strip()
     
 
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    password = serializers.CharField(write_only=True, min_length=8)
 
+    def validate_password(self, value):
+        validate_password(value)
+        return value
         
