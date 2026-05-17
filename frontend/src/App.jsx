@@ -10,6 +10,9 @@ import SignupPage from './pages/SignupPage'
 import VerifyEmailPage from './pages/VerifyEmailPage'
 import WorkspaceSetupPage from './pages/WorkspaceSetupPage'
 import LoginPage from './pages/LoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+
 
 // temporary placeholders
 
@@ -49,6 +52,16 @@ export default function App() {
               <Route
                 path="/verify-email"
                 element={<VerifyEmailPage />}
+              />
+
+              <Route
+                path="/forgot-password"
+                element={<ForgotPasswordPage />}
+              />
+
+              <Route
+                path="/reset-password"
+                element={<ResetPasswordPage />}
               />
 
             </Route>

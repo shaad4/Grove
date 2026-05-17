@@ -8,5 +8,8 @@ export const authApi = {
   verifyEmail:  (token) => api.post('/auth/verify-email/', { token }),
   checkSlug: (slug) => api.get(`/auth/check-slug/?slug=${slug}`),
   setupWorkspace: (data) => api.post('/auth/setup-workspace/', data),
+  forgotPassword: (email) => api.post('/auth/forgot-password/',{email}),
+  resetPassword: (token, password) => api.post('/auth/reset-password/', {token, password}),
   
 }
+
