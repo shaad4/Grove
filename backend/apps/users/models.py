@@ -37,7 +37,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         null=True, blank=True, related_name="users"
     )
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.PROVIDER)
-    email = models.EmailField(unique=True)
+    email = models.EmailField(unique=False)
     display_name = models.CharField(max_length=255)
     avatar_url = models.TextField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
@@ -50,7 +50,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    USERNAME_FIELD = "email"
+    USERNAME_FIELD = "id"
     REQUIRED_FIELDS = ["display_name"]
 
     class Meta:

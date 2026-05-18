@@ -253,7 +253,6 @@ class LoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(
             data = request.data,
-            context={'request' : request}
         )
 
         if not serializer.is_valid():

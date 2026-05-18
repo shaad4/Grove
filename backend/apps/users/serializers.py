@@ -131,16 +131,18 @@ class LoginSerializer(serializers.Serializer):
         email = data.get('email').lower().strip()
         password = data.get('password')
 
-        user = authenticate(
-            request= self.context.get('request'),
-            username = email,
-            password = password
-        )
+        try:
+            user = User.objects.get(email=email, role=User.Role.PROVIDER)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid email or password.")
+        except User.MultipleObjectsReturned:
+            raise serializers.ValidationError("Invalid email or password.")
 
-        if not user:
-            raise serializers.ValidationError(
-                "Invalid Email or Password"
-            )
+
+
+        if not user.check_password(password):
+            raise serializers.ValidationError("Invalid email or password.")
+    
         
         if not user.is_active:
             raise serializers.ValidationError(
@@ -152,10 +154,6 @@ class LoginSerializer(serializers.Serializer):
                 "Please verify your email before logging in."
             )
         
-        if user.role != 'provider':
-            raise serializers.ValidationError(
-                "Invalid Credentials."
-            )
         
         data['user'] = user
         return data
