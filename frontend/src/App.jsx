@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
 import { AuthProvider } from './context/AuthContext'
 import { ProtectedRoute, GuestRoute } from './routes/ProtectedRoute'
-
+import TenantRoute from './routes/TenantRoute'
 import ErrorBoundary from './ErrorBoundary'
 
 import LandingPage from './pages/LandingPage'
@@ -76,7 +76,11 @@ export default function App() {
 
               <Route
                 path="/dashboard"
-                element={<DashboardPage />}
+                element={
+                  <TenantRoute>
+                    <DashboardPage />
+                  </TenantRoute>
+                }
               />
 
             </Route>

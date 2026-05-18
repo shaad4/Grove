@@ -65,11 +65,21 @@ export default function LoginPage() {
         password,
       })
 
+      const payload = data
+
       saveSession({
-        accessToken: data.access,
-        user: data.user,
-        tenant: data.user.tenantId,
+        accessToken: payload.access,
+        user: payload.user,
+        tenant: payload.tenant,
       })
+
+      const slug = payload.tenant?.slug
+
+      if (slug) {
+
+        window.location.replace(`http://${slug}.lvh.me:5173/dashboard`)
+
+      }
 
     } catch (err) {
       const d = err.response?.data

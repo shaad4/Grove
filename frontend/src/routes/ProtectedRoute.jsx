@@ -3,6 +3,8 @@ import {
   Outlet,
 } from 'react-router-dom'
 
+import { isTenantDomain } from '../utils/domain'
+
 import { useAuth } from '../context/AuthContext'
 
 export function ProtectedRoute() {

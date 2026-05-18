@@ -147,7 +147,7 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 
-CORS_ALLOW_ALL_ORIGINS = True 
+
 
 # JWT
 from datetime import timedelta
@@ -175,9 +175,13 @@ REST_FRAMEWORK = {
 
 # CORS
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
+   "http://lvh.me:5173",
 ]
+
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://\w+\.lvh\.me:5173$",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 
 
@@ -196,4 +200,4 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("EMAIL_HOST_USER", default="logonxavi77@gmail.com")
 
-FRONTEND_URL = config("FRONTEND_URL", default="http://localhost:5173")
+FRONTEND_URL = config("FRONTEND_URL")

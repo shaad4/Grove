@@ -10,6 +10,6 @@ export const authApi = {
   setupWorkspace: (data) => api.post('/auth/setup-workspace/', data),
   forgotPassword: (email) => api.post('/auth/forgot-password/',{email}),
   resetPassword: (token, password) => api.post('/auth/reset-password/', {token, password}),
-  
+  me: () => api.get('/auth/me/'),
 }
 

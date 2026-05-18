@@ -9,13 +9,14 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.notifications.tasks import send_verification_email, send_password_reset_email
 from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer, LoginSerializer, ForgetPasswordSerializer, ResetPasswordSerializer
 from apps.tenants.models import Tenant,Plan,TenantUsage
 from django.contrib.auth.models import update_last_login
 
-
+from .utils import set_auth_cookies
 from django.utils import timezone
 
 
@@ -26,6 +27,53 @@ def _get_tokens_for_user(user):
         "access": str(refresh.access_token),
         "refresh": str(refresh),
     }
+
+class RefreshTokenView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+
+        try:
+
+            refresh_token = request.COOKIES.get(
+                "refresh_token"
+            )
+
+            if not refresh_token:
+
+                return Response(
+                    {
+                        "success": False,
+                        "message": "No refresh token found."
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            refresh = RefreshToken(refresh_token)
+
+            access_token = str(
+                refresh.access_token
+            )
+
+            return Response({
+                "success": True,
+                "access": access_token,
+            })
+
+        except Exception as e:
+
+            print(
+                "REFRESH ERROR:",
+                str(e)
+            )
+
+            return Response(
+                {
+                    "success": False,
+                    "message": "Invalid refresh token."
+                },
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
 
 class ProviderSignupView(APIView):
@@ -144,22 +192,31 @@ class VerifyEmailAPIView(APIView):
         verification_token.used_at = timezone.now()
         verification_token.save()
 
-        tokens = _get_tokens_for_user(user)
+        refresh = RefreshToken.for_user(user)
 
-        return Response({
+        response = Response({
             "success": True,
             "message": "Email verified successfully",
             "data": {
-                "tokens": tokens,
+                "access": str(refresh.access_token),
+
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
                     "display_name": user.display_name,
                     "role": user.role,
+                },
+
+                "tenant": {
+                    "slug": user.tenant.slug if user.tenant else None,
                 }
             }
         })
-    
+
+        set_auth_cookies(response, refresh)
+
+        return response
+        
 
 
 
@@ -197,19 +254,21 @@ class WorkspaceSetupAPIView(APIView):
         user.tenant = tenant
         user.save()
 
-        tokens = _get_tokens_for_user(user)
+        refresh = RefreshToken.for_user(user)
 
-
-        return Response({
+        response = Response({
             "success": True,
             "message": "Workspace created successfully",
             "data": {
-                "tokens": tokens,
+
+                "access": str(refresh.access_token),
+
                 "tenant": {
                     "id": str(tenant.id),
                     "name": tenant.name,
                     "slug": tenant.slug,
                 },
+
                 "user": {
                     "id": str(user.id),
                     "email": user.email,
@@ -217,6 +276,10 @@ class WorkspaceSetupAPIView(APIView):
                 }
             }
         })
+
+        set_auth_cookies(response, refresh)
+
+        return response
 
 
 
@@ -267,17 +330,25 @@ class LoginView(APIView):
 
         refresh = RefreshToken.for_user(user)
 
-        return Response({
+        response = Response({
             'access': str(refresh.access_token),
-            'refresh': str(refresh),
+
             'user': {
                 'id': str(user.id),
                 'email': user.email,
                 'display_name': user.display_name,
                 'role': user.role,
                 'tenant_id': str(user.tenant_id) if user.tenant_id else None,
+            },
+
+            'tenant': {
+                'slug': user.tenant.slug if user.tenant else None,
             }
         }, status=status.HTTP_200_OK)
+
+        set_auth_cookies(response, refresh)
+
+        return response
     
 
 
@@ -360,4 +431,26 @@ class ResetPasswordView(APIView):
         return Response({
             'success' : True,
             'message' : "Password reset successfully."
+        })
+    
+
+
+class MeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        user = request.user
+
+        return Response({
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "display_name": user.display_name,
+                "role": user.role,
+            },
+
+            "tenant": user.tenant and {
+                "slug": user.tenant.slug,
+            } or None
         })
