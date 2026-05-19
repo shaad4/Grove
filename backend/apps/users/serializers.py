@@ -144,14 +144,16 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError("Invalid email or password.")
     
         
-        if not user.is_active:
-            raise serializers.ValidationError(
-                "This account as been deactivated"
-            )
+       
         
         if not user.is_email_verified:
             raise serializers.ValidationError(
                 "Please verify your email before logging in."
+            )
+        
+        if not user.is_active:
+            raise serializers.ValidationError(
+                "This account as been deactivated"
             )
         
         
