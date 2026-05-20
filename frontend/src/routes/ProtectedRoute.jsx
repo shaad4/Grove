@@ -44,16 +44,22 @@ export function SetupRoute() {
 }
 
 export function GuestRoute() {
-  const { isAuth, tenant, loading } = useAuth()
+  const { isAuth, tenant, user, loading } = useAuth()
+  console.log('GuestRoute:', { isAuth, user, tenant, loading })
 
   if (loading) return null
 
-  if (isAuth && !tenant?.slug) {
-    return <Navigate to="/setup-workspace" replace />
+  if (isAuth && user?.role === 'provider') {
+    if (!tenant?.slug) {
+      return <Navigate to="/setup-workspace" replace />
+    }
+    window.location.replace(`http://${tenant.slug}.lvh.me:5173/dashboard`)
+    return null
   }
 
-  if (isAuth && tenant?.slug) {
-    window.location.replace(`http://${tenant.slug}.lvh.me:5173/dashboard`)
+  if (isAuth && user?.role === 'client') {
+    const subdomain = getSubdomain()
+    window.location.replace(`http://${subdomain || tenant?.slug}.lvh.me:5173/dashboard`)
     return null
   }
 

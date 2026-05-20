@@ -11,10 +11,6 @@ import {
 } from 'react-redux'
 
 import {
-  useNavigate,
-} from 'react-router-dom'
-
-import {
   setCredentials,
   clearAuth,
   selectCurrentUser,
@@ -23,14 +19,19 @@ import {
 } from '../features/auth/authSlice'
 
 import { authApi } from '../api/auth.api'
-import { getSubdomain } from '../utils/domain'
 
 const AuthContext = createContext(null)
+
+// Pages where we skip silent restore entirely —
+// these are pre-auth flows with no session to restore
+const SKIP_RESTORE_PATHS = [
+  '/client-login',
+  '/accept-invite',
+]
 
 export function AuthProvider({ children }) {
 
   const dispatch = useDispatch()
-  const navigate = useNavigate()
 
   const [loading, setLoading] = useState(true)
 
@@ -43,7 +44,6 @@ export function AuthProvider({ children }) {
     user,
     tenant,
   }) => {
-
     dispatch(setCredentials({
       accessToken,
       user,
@@ -52,7 +52,6 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
-
     try {
       await authApi.logout()
     } catch (_) {}
@@ -67,29 +66,27 @@ export function AuthProvider({ children }) {
 
     const restoreSession = async () => {
 
+      // Skip restore on pre-auth pages — no cookie exists yet
+      // and a failed refresh would just clear state unnecessarily
+      if (SKIP_RESTORE_PATHS.includes(window.location.pathname)) {
+        setLoading(false)
+        return
+      }
+
       try {
+        // Sends httpOnly refresh cookie automatically via withCredentials
+        const refreshRes = await authApi.refreshToken()
+        const accessToken = refreshRes.data.access
 
-
-
-        // uses refresh cookie automatically
-        const refreshRes =
-          await authApi.refreshToken()
-
-
-
-        const accessToken =
-        refreshRes.data.access
-
-        // FIRST store token
+        // Store token first so the /me/ request has auth
         dispatch(setCredentials({
           accessToken,
           user: null,
           tenant: null,
         }))
 
-        // THEN call /me/
-        const meRes =
-          await authApi.me()
+        // Then hydrate user + tenant
+        const meRes = await authApi.me()
 
         dispatch(setCredentials({
           accessToken,
@@ -98,17 +95,10 @@ export function AuthProvider({ children }) {
         }))
 
       } catch (err) {
+        // Refresh failed — no valid session, clear everything
         dispatch(clearAuth())
 
-        const publicPaths = ['/accept-invite', '/client-login']
-        const isPublicPath = publicPaths.includes(window.location.pathname)
-
-        if (getSubdomain() && !isPublicPath) {
-          window.location.replace(`http://${getSubdomain()}.lvh.me:5173/client-login`)
-        }
-
       } finally {
-
         setLoading(false)
       }
     }
@@ -117,6 +107,9 @@ export function AuthProvider({ children }) {
 
   }, [dispatch])
 
+  // Render children immediately — route guards handle
+  // the loading state themselves via `if (loading) return null`
+  // Blocking here causes a full blank screen on every page load
   return (
     <AuthContext.Provider
       value={{
@@ -128,7 +121,7 @@ export function AuthProvider({ children }) {
         loading,
       }}
     >
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   )
 }

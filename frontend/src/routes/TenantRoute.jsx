@@ -28,12 +28,13 @@ export default function TenantRoute({
 
   // not authenticated
   if (!isAuth) {
-    return (
-      <Navigate
-        to="/login"
-        replace
-      />
-    )
+    // client context → client login
+    if (subdomain) {
+      window.location.replace(`http://${subdomain}.lvh.me:5173/client-login`)
+      return null
+    }
+    // provider context → provider login
+    return <Navigate to="/login" replace />
   }
 
   // no workspace yet

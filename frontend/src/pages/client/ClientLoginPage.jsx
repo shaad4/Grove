@@ -9,7 +9,6 @@ export default function ClientLoginPage() {
   const { saveSession, isAuth, user } = useAuth()
   const subdomain = getSubdomain()
 
-  const [workspaceName, setWorkspaceName]   = useState(subdomain || '')
   const [email, setEmail]                   = useState('')
   const [password, setPassword]             = useState('')
   const [showPw, setShowPw]                 = useState(false)
@@ -33,7 +32,6 @@ export default function ClientLoginPage() {
         { email: email.trim(), password },
         { headers: {'X-Tenant-Slug' : subdomain } }
       )
-      console.log('client login response:', res.data)
 
       const { access, user: u, tenant } = res.data
 

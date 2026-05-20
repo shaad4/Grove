@@ -16,6 +16,7 @@ export const authApi = {
   validateInviteToken: (token)  => api.get(`/clients/invite/validate/?token=${token}`),
   acceptInvite: (data)   => api.post('/clients/invite/accept/', data),
   clientLogin: (data, config)   => api.post('/clients/login/', data, config),
+  checkTenantSlug : (slug) => api.get(`/tenants/validate/?slug=${slug}`)
 
 
 }

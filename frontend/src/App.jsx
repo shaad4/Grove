@@ -22,6 +22,8 @@ import ClientDashboard   from './pages/client/ClientDashboard'
 
 // Provider pages
 import ProviderDashboard from './pages/provider/ProviderDashboard'
+import TenantGuard from './routes/TenantGuard'
+import WorkspaceNotFoundPage from './pages/WorkspaceNotFoundPage'
 
 // Role-based dashboard switcher
 function RoleDashboard() {
@@ -37,45 +39,49 @@ export default function App() {
     <ErrorBoundary>
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
+          <TenantGuard>
+            <Routes>
 
-            {/* PUBLIC LANDING */}
-            <Route path="/" element={<LandingPage />} />
+              {/* PUBLIC LANDING */}
+              <Route path="/" element={<LandingPage />} />
 
-            {/* PUBLIC — no auth needed, lives on provider subdomain */}
-            <Route path="/accept-invite"  element={<AcceptInvitePage />} />
-            <Route path="/client-login"   element={<ClientLoginPage />} />
+              {/* PUBLIC — no auth needed, lives on provider subdomain */}
+              <Route path="/accept-invite"  element={<AcceptInvitePage />} />
+              <Route path="/client-login"   element={<ClientLoginPage />} />
 
-            {/* GUEST ROUTES — unauthenticated only */}
-            <Route element={<GuestRoute />}>
-              <Route path="/signup"          element={<SignupPage />} />
-              <Route path="/login"           element={<LoginPage />} />
-              <Route path="/verify-email"    element={<VerifyEmailPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password"  element={<ResetPasswordPage />} />
-            </Route>
+              {/* GUEST ROUTES — unauthenticated only */}
+              <Route element={<GuestRoute />}>
+                <Route path="/signup"          element={<SignupPage />} />
+                <Route path="/login"           element={<LoginPage />} />
+                <Route path="/verify-email"    element={<VerifyEmailPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password"  element={<ResetPasswordPage />} />
+              </Route>
 
-            {/* SETUP ROUTE — provider authenticated but no workspace yet */}
-            <Route element={<SetupRoute />}>
-              <Route path="/setup-workspace" element={<WorkspaceSetupPage />} />
-            </Route>
+              {/* SETUP ROUTE — provider authenticated but no workspace yet */}
+              <Route element={<SetupRoute />}>
+                <Route path="/setup-workspace" element={<WorkspaceSetupPage />} />
+              </Route>
 
-            {/* PROTECTED TENANT ROUTES — authenticated + workspace required */}
-            <Route element={<ProtectedRoute />}>
-              <Route
-                path="/dashboard"
-                element={
-                  <TenantRoute>
-                    <RoleDashboard />
-                  </TenantRoute>
-                }
-              />
-            </Route>
+              {/* PROTECTED TENANT ROUTES — authenticated + workspace required */}
+              <Route element={<ProtectedRoute />}>
+                <Route
+                  path="/dashboard"
+                  element={
+                    <TenantRoute>
+                      <RoleDashboard />
+                    </TenantRoute>
+                  }
+                />
+              </Route>
 
-            {/* 404 FALLBACK */}
-            <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path='/workspace-not-found' element={<WorkspaceNotFoundPage />} />
 
-          </Routes>
+              {/* 404 FALLBACK */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+
+            </Routes>
+          </TenantGuard>
         </AuthProvider>
       </BrowserRouter>
     </ErrorBoundary>
