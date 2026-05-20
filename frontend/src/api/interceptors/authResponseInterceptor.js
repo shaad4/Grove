@@ -50,7 +50,7 @@ export const authResponseInterceptor = async (_store, api, error) => {
   } catch (refreshError) {
     rejectQueue(refreshError)
     _store.dispatch(clearAuth())
-    window.location.href = '/login'
+    window.location.replace('http://lvh.me:5173/login')  
     return Promise.reject(refreshError)
 
   } finally {

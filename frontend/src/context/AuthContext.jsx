@@ -23,6 +23,7 @@ import {
 } from '../features/auth/authSlice'
 
 import { authApi } from '../api/auth.api'
+import { getSubdomain } from '../utils/domain'
 
 const AuthContext = createContext(null)
 
@@ -58,7 +59,7 @@ export function AuthProvider({ children }) {
 
     dispatch(clearAuth())
 
-    navigate('/login')
+    window.location.replace('http://lvh.me:5173/login')
   }
 
   // SILENT AUTH RESTORE
@@ -97,9 +98,14 @@ export function AuthProvider({ children }) {
         }))
 
       } catch (err) {
-
-
         dispatch(clearAuth())
+
+        const publicPaths = ['/accept-invite', '/client-login']
+        const isPublicPath = publicPaths.includes(window.location.pathname)
+
+        if (getSubdomain() && !isPublicPath) {
+          window.location.replace(`http://${getSubdomain()}.lvh.me:5173/client-login`)
+        }
 
       } finally {
 

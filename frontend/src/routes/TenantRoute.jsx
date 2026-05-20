@@ -3,10 +3,6 @@ import {
 } from 'react-router-dom'
 
 import {
-  useEffect,
-} from 'react'
-
-import {
   getSubdomain,
 } from '../utils/domain'
 
@@ -24,24 +20,7 @@ export default function TenantRoute({
     isAuth,
   } = useAuth()
 
-  const subdomain =
-    getSubdomain()
-
-  // redirect safely
-  useEffect(() => {
-
-    if (
-      tenant?.slug &&
-      subdomain &&
-      tenant.slug !== subdomain
-    ) {
-
-      window.location.replace(
-        `http://${tenant.slug}.lvh.me:5173/dashboard`
-      )
-    }
-
-  }, [tenant, subdomain])
+  const subdomain = getSubdomain()
 
   if (loading) {
     return null
@@ -49,7 +28,6 @@ export default function TenantRoute({
 
   // not authenticated
   if (!isAuth) {
-
     return (
       <Navigate
         to="/login"
@@ -60,7 +38,6 @@ export default function TenantRoute({
 
   // no workspace yet
   if (!tenant?.slug) {
-
     return (
       <Navigate
         to="/setup-workspace"
@@ -69,10 +46,13 @@ export default function TenantRoute({
     )
   }
 
-  // waiting for redirect
-  if (
-    tenant.slug !== subdomain
-  ) {
+  // subdomain missing or wrong — redirect inline, no effect needed.
+  // using window.location.pathname preserves the current path
+  // so /requests, /clients etc. all redirect correctly, not just /dashboard
+  if (tenant.slug !== subdomain) {
+    window.location.replace(
+      `http://${tenant.slug}.lvh.me:5173${window.location.pathname}`
+    )
     return null
   }
 

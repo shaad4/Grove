@@ -1,12 +1,18 @@
-import { selectAccessToken } from '../../features/auth/authSlice'
+import { selectAccessToken, selectTenant } from '../../features/auth/authSlice'
 
 export const authRequestInterceptor = (_store, config) => {
-  // _store might not be injected yet during app boot — guard it
   if (!_store) return config
 
-  const token = selectAccessToken(_store.getState())
+  const state = _store.getState()
+
+  const token = selectAccessToken(state)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
+  }
+
+  const tenantSlug = selectTenant(state)?.slug
+  if (tenantSlug) {
+    config.headers['X-Tenant-Slug'] = tenantSlug
   }
 
   return config

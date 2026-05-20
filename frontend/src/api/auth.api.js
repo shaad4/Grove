@@ -11,5 +11,12 @@ export const authApi = {
   forgotPassword: (email) => api.post('/auth/forgot-password/',{email}),
   resetPassword: (token, password) => api.post('/auth/reset-password/', {token, password}),
   me: () => api.get('/auth/me/'),
+  listClients: () => api.get('/clients/'),
+  addClient: (data)   => api.post('/clients/', data),
+  validateInviteToken: (token)  => api.get(`/clients/invite/validate/?token=${token}`),
+  acceptInvite: (data)   => api.post('/clients/invite/accept/', data),
+  clientLogin: (data, config)   => api.post('/clients/login/', data, config),
+
+
 }
 
