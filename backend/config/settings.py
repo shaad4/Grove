@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 from decouple import config
+from corsheaders.defaults import default_headers
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -28,6 +29,7 @@ SECRET_KEY = config("SECRET_KEY")
 DEBUG = config("DEBUG", cast=bool)
 
 ALLOWED_HOSTS = config("ALLOWED_HOSTS", default="localhost").split(",")
+ALLOWED_HOSTS += [".lvh.me"]  # covers api.lvh.me, saniya.lvh.me, etc.
 
 AUTH_USER_MODEL = "users.User"
 
@@ -59,12 +61,12 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    "corsheaders.middleware.CorsMiddleware",
-    'apps.tenants.middleware.TenantMiddleware',   # tenant middleware
+    "corsheaders.middleware.CorsMiddleware",   
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'apps.tenants.middleware.TenantMiddleware', #tenant middleware
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
@@ -146,7 +148,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # JWT
@@ -156,6 +158,8 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
+    "USER_ID_FIELD" : "id",
+    "USER_ID_CLAIM" : "user_id",
 }
 
 # DRF
@@ -165,6 +169,7 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
+        "apps.tenants.permissions.BelongsToTenant",
     ),
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
@@ -179,10 +184,14 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^http://\w+\.lvh\.me:5173$",
+    r"^http://.*\.lvh\.me(:\d+)?$",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "x-tenant-slug",
+]
 
 
 # Celery

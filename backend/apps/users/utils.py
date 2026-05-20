@@ -1,7 +1,7 @@
-def set_auth_cookies(response, refresh_token):
+def set_auth_cookies(response, refresh_token, cookie_name="refresh_token"):
 
     response.set_cookie(
-        key="refresh_token",
+        key=cookie_name,
         value=str(refresh_token),
 
         httponly=True,

@@ -20,58 +20,51 @@ from .utils import set_auth_cookies
 from django.utils import timezone
 
 
-def _get_tokens_for_user(user):
-    refresh = RefreshToken.for_user(user)
+# def _get_tokens_for_user(user):
+#     refresh = RefreshToken.for_user(user)
 
-    return {
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-    }
+#     return {
+#         "access": str(refresh.access_token),
+#         "refresh": str(refresh),
+#     }
 
 class RefreshTokenView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        print("ALL COOKIES:", request.COOKIES)
+        tenant = getattr(request, 'tenant', None)
+
+        if tenant:
+            refresh_token = (
+                request.COOKIES.get(f"client_refresh_{tenant.slug}") or
+                request.COOKIES.get(f"provider_refresh_{tenant.slug}") or
+                request.COOKIES.get("refresh_token")
+            )
+        else:
+            # api.lvh.me has no tenant — scan cookies for any refresh token
+            refresh_token = request.COOKIES.get("refresh_token")
+            if not refresh_token:
+                for key, value in request.COOKIES.items():
+                    if key.startswith("provider_refresh_") or key.startswith("client_refresh_"):
+                        refresh_token = value
+                        break
+
+        if not refresh_token:
+            return Response(
+                {"success": False, "message": "No refresh token found."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
 
         try:
-
-            refresh_token = request.COOKIES.get(
-                "refresh_token"
-            )
-
-            if not refresh_token:
-
-                return Response(
-                    {
-                        "success": False,
-                        "message": "No refresh token found."
-                    },
-                    status=status.HTTP_401_UNAUTHORIZED
-                )
-
             refresh = RefreshToken(refresh_token)
-
-            access_token = str(
-                refresh.access_token
-            )
-
-            return Response({
-                "success": True,
-                "access": access_token,
-            })
+            access_token = str(refresh.access_token)
+            return Response({"success": True, "access": access_token})
 
         except Exception as e:
-
-            print(
-                "REFRESH ERROR:",
-                str(e)
-            )
-
+            print("REFRESH ERROR:", str(e))
             return Response(
-                {
-                    "success": False,
-                    "message": "Invalid refresh token."
-                },
+                {"success": False, "message": "Invalid refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
@@ -277,7 +270,7 @@ class WorkspaceSetupAPIView(APIView):
             }
         })
 
-        set_auth_cookies(response, refresh)
+        set_auth_cookies(response, refresh, cookie_name=f"provider_refresh_{tenant.slug}")
 
         return response
 
@@ -346,7 +339,7 @@ class LoginView(APIView):
             }
         }, status=status.HTTP_200_OK)
 
-        set_auth_cookies(response, refresh)
+        set_auth_cookies(response, refresh,  cookie_name=f"provider_refresh_{user.tenant.slug}" if user.tenant else "refresh_token")
 
         return response
     
@@ -382,6 +375,12 @@ class ForgotPasswordView(APIView):
         reset_token = PasswordResetToken.objects.create(
             user=user,
             expires_at=timezone.now() + timezone.timedelta(minutes=30)
+        )
+
+        send_password_reset_email.delay(
+            user_email=user.email,
+            display_name = user.display_name,
+            token = str(reset_token.token),
         )
 
         return Response({
@@ -454,3 +453,41 @@ class MeView(APIView):
                 "slug": user.tenant.slug,
             } or None
         })
+        
+
+
+class LogoutView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        tenant = getattr(request, 'tenant', None)
+
+        if tenant:
+            client_cookie = f"client_refresh_{tenant.slug}"
+            provider_cookie = f"provider_refresh_{tenant.slug}"
+            
+            refresh_token = (
+                request.COOKIES.get(client_cookie) or
+                request.COOKIES.get(provider_cookie)
+            )
+        else:
+            client_cookie = None
+            provider_cookie = None
+            refresh_token = request.COOKIES.get("refresh_token")
+
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                pass
+
+        response = Response({"success": True, "message": "Logged Out."})
+        
+        if tenant:
+            response.delete_cookie(f"client_refresh_{tenant.slug}", domain=".lvh.me", path="/")
+            response.delete_cookie(f"provider_refresh_{tenant.slug}", domain=".lvh.me", path="/")
+        else:
+            response.delete_cookie("refresh_token", domain=".lvh.me", path="/")
+
+        return response
