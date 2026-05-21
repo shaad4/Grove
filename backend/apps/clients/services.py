@@ -1,9 +1,9 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.users.models import User
+from apps.users.models import User, PasswordResetToken
 from apps.tenants.models import TenantUsage
-from .repositories import ClientRepository, InviteRepository
+from .repositories import ClientRepository, InviteRepository, PasswordResetRepository
 from django.utils.crypto import get_random_string
 
 # custom exceptions
@@ -17,6 +17,12 @@ class InvalidInviteToken(Exception):
     pass
 
 class ExpiredInviteToken(Exception):
+    pass
+
+class InvalidResetToken(Exception):
+    pass
+
+class ExpiredResetToken(Exception):
     pass
 
 
@@ -144,3 +150,71 @@ class ClientService:
             "tenant" : invite.tenant,
         }
         
+
+class ClientPasswordResetService:
+
+
+    @staticmethod
+    def request_reset(email, tenant):
+        """
+        Look up an active client by email scoped to this tenant.
+        Expire any pending tokens, create a new one, return it.
+        Returns None if user not found — caller sends same response
+        either way (no email enumeration).
+        """
+
+        try:
+            user = User.objects.get(
+                email=email,
+                tenant=tenant,
+                role=User.Role.CLIENT,
+                is_active=True,
+            )
+        except User.DoesNotExist:
+            return None
+        
+        if user.client_profile.is_deactivated:
+            return None
+        
+
+        PasswordResetRepository.expire_pending(user)
+
+        reset_token = PasswordResetRepository.create(
+            user=user,
+            expires_at=timezone.now() + timezone.timedelta(minutes=30),
+        )
+
+        return {
+            "user" : user,
+            "reset_token" : reset_token,
+        }
+    
+
+    @staticmethod
+    def confirm_reset(token, new_password):
+        """
+        Validate token, reset password, mark token used.
+        Raises InvalidResetToken or ExpiredResetToken on failure.
+        """
+
+        reset_token = PasswordResetRepository.get_pending_by_token(token)
+
+        if reset_token is None:
+            raise InvalidResetToken("Invalid or already used reset link.")
+        
+        if reset_token.expires_at < timezone.now():
+            reset_token.status = PasswordResetToken.Status.EXPIRED
+            reset_token.save(update_fields=["status"])
+            raise ExpiredResetToken("Reset link has expired. Please request a new one.")
+
+
+        user = reset_token.user
+        user.set_password(new_password)
+        user.save(update_fields=["password", "updated_at"])
+
+
+        reset_token.status = PasswordResetToken.Status.USED
+        reset_token.used_at = timezone.now()
+        reset_token.save(update_fields=["status", "used_at"])
+
+

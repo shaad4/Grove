@@ -40,3 +40,5 @@ class ClientListSerializer(serializers.ModelSerializer):
             "joined_at",
             "business_type",
         ]
+
+
