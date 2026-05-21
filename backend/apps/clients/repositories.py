@@ -116,6 +116,32 @@ class InviteRepository:
 
 
 
+class PasswordResetRepository:
+
+    @staticmethod
+    def expire_pending(user):
+        PasswordResetToken.objects.filter(
+            user=user,
+            status=PasswordResetToken.Status.PENDING,
+        ).update(status=PasswordResetToken.Status.EXPIRED)
+
+
+    @staticmethod
+    def create(user, expires_at):
+        return PasswordResetToken.objects.create(
+            user =  user,
+            expires_at = expires_at,
+        )
+    
+    @staticmethod
+    def get_pending_by_token(token):
+        try:
+            return PasswordResetToken.objects.select_related("user").get(
+                token=token,
+                status=PasswordResetToken.Status.PENDING,
+            )
+        except PasswordResetToken.DoesNotExist:
+            return None
 
 
 
