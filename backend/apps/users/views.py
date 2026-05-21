@@ -32,23 +32,25 @@ class RefreshTokenView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        print("ALL COOKIES:", request.COOKIES)
+        # Try tenant from middleware (subdomain resolution) first
         tenant = getattr(request, 'tenant', None)
+        
+        # Fallback: slug hint from request body
+        slug_hint = request.data.get('slug')
+        if not tenant and slug_hint:
+            try:
+                from apps.tenants.models import Tenant
+                tenant = Tenant.objects.get(slug=slug_hint, is_active=True)
+            except Tenant.DoesNotExist:
+                pass
 
         if tenant:
             refresh_token = (
                 request.COOKIES.get(f"client_refresh_{tenant.slug}") or
-                request.COOKIES.get(f"provider_refresh_{tenant.slug}") or
-                request.COOKIES.get("refresh_token")
+                request.COOKIES.get(f"provider_refresh_{tenant.slug}")
             )
         else:
-            # api.lvh.me has no tenant — scan cookies for any refresh token
             refresh_token = request.COOKIES.get("refresh_token")
-            if not refresh_token:
-                for key, value in request.COOKIES.items():
-                    if key.startswith("provider_refresh_") or key.startswith("client_refresh_"):
-                        refresh_token = value
-                        break
 
         if not refresh_token:
             return Response(
@@ -59,15 +61,16 @@ class RefreshTokenView(APIView):
         try:
             refresh = RefreshToken(refresh_token)
             access_token = str(refresh.access_token)
-            return Response({"success": True, "access": access_token})
+            
+            # Set updated cookie if rotation is on
+            response = Response({"success": True, "access": access_token})
+            return response
 
-        except Exception as e:
-            print("REFRESH ERROR:", str(e))
+        except Exception:
             return Response(
                 {"success": False, "message": "Invalid refresh token."},
                 status=status.HTTP_401_UNAUTHORIZED
             )
-
 
 class ProviderSignupView(APIView):
     """
