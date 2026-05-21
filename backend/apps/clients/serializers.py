@@ -42,3 +42,17 @@ class ClientListSerializer(serializers.ModelSerializer):
         ]
 
 
+class ClientForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.lower().strip()
+    
+class ClientResetPasswordSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_password(self, value):
+        validate_password(value)
+        return value
+        
