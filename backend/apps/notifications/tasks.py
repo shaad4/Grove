@@ -275,16 +275,24 @@ def send_verification_email(
 
 
 @shared_task(bind=True, max_retries=3, default_retry=60)
-def send_password_reset_email(self, user_email, display_name, token):
+def send_password_reset_email(self, user_email, display_name, token, tenant_slug=None):
     """
     Sends Grove password reset email with HTML UI.
     Retries automatically on failure.
     """
+    
+    base_frontend = settings.FRONTEND_URL.replace("http://", "").replace("https://", "")
 
-    reset_url = (
-        f"{settings.FRONTEND_URL}"
-        f"/reset-password?token={token}"
-    )
+    if tenant_slug:
+        reset_url = (
+            f"http://{tenant_slug}.{base_frontend}"
+            f"/reset-password?token={token}"
+        )
+    else:
+        reset_url = (
+            f"{settings.FRONTEND_URL}"
+            f"/reset-password?token={token}"
+        )
 
     subject = "Reset your Grove password"
 

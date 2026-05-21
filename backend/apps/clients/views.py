@@ -336,6 +336,7 @@ class ClientForgotPasswordView(APIView):
                 user_email=result["user"].email,
                 display_name=result["user"].display_name,
                 token=str(result['reset_token'].token),
+                tenant_slug=tenant.slug,
             )
 
         return Response({
