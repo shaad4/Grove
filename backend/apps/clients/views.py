@@ -14,6 +14,8 @@ from .serializers import (
     AddClientSerializer,
     AcceptInviteSerializer,
     ClientListSerializer,
+    ClientForgotPasswordSerializer,
+    ClientResetPasswordSerializer,
 )
 
 from .services import (
@@ -22,10 +24,14 @@ from .services import (
     DuplicateClientEmail,
     InvalidInviteToken,
     ExpiredInviteToken,
+    InvalidResetToken,
+    ExpiredResetToken,
+    ClientPasswordResetService,
 )
+
 from .repositories import ClientRepository, InviteRepository
 from .tasks import send_client_invite_email
-
+from apps.notifications.tasks import send_password_reset_email
 
 # Create your views here.
 
@@ -300,7 +306,75 @@ class ClientLoginView(APIView):
         
 
 
+class ClientForgotPasswordView(APIView):
+    """
+    POST /clients/forgot-password/
+    Subdomain-scoped — tenant resolved by middleware.
+    Sends a reset link to the client's email if found.
+    """
 
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        tenant = getattr(request, "tenant", None)
+        if not tenant:
+            return Response(
+                {"success": False, "message": "Invalid workspace."},
+                status=400,
+            )
+            
+        serializer = ClientForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        result = ClientPasswordResetService.request_reset(
+            email=serializer.validated_data["email"],
+            tenant=tenant,
+        )
+
+        if result:
+            send_password_reset_email.delay(
+                user_email=result["user"].email,
+                display_name=result["user"].display_name,
+                token=str(result['reset_token'].token),
+            )
+
+        return Response({
+            "success": True,
+            "message": "If this email is registered, a reset link has been sent.",
+        })
 
 
         
+class ClientResetPasswordView(APIView):
+    """
+    POST /clients/reset-password/
+    Token is not tenant-scoped — the token itself is globally unique (UUID).
+    No tenant middleware needed here.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = ClientResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            ClientPasswordResetService.confirm_reset(
+                token=serializer.validated_data["token"],
+                new_password=serializer.validated_data["password"],
+            )
+        except InvalidResetToken as e:
+            return Response(
+                {"success": False, "message": str(e)},
+                status=400,
+            )
+        except ExpiredResetToken as e:
+            return Response(
+                {"success": False, "message": str(e)},
+                status=400,
+            )
+        
+        return Response({
+            "success": True,
+            "message": "Password reset successfully.",
+        })
