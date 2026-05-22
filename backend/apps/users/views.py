@@ -12,9 +12,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.notifications.tasks import send_verification_email, send_password_reset_email
-from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer, LoginSerializer, ForgetPasswordSerializer, ResetPasswordSerializer
+from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer, LoginSerializer, ForgetPasswordSerializer, ResetPasswordSerializer, GoogleAuthSerializer
 from apps.tenants.models import Tenant,Plan,TenantUsage
 from django.contrib.auth.models import update_last_login
+
 
 from .utils import set_auth_cookies
 from django.utils import timezone
@@ -494,3 +495,75 @@ class LogoutView(APIView):
             response.delete_cookie("refresh_token", domain=".lvh.me", path="/")
 
         return response
+    
+
+class GoogleAuthView(APIView):
+    permission_classes = [AllowAny]
+ 
+    def post(self, request):
+        serializer = GoogleAuthSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+ 
+        google_data = serializer.validated_data['access_token'] 
+        email = google_data['email']
+ 
+        existing = User.objects.filter(
+            email=email,
+            role=User.Role.PROVIDER,
+        ).first()
+ 
+        if existing:
+            if not existing.is_active:
+                return Response(
+                    {'success': False, 'message': 'This account has been deactivated.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            user = existing
+            if not user.is_email_verified:
+                user.is_email_verified = True
+                user.is_active = True
+            if not user.avatar_url and google_data['avatar_url']:
+                user.avatar_url = google_data['avatar_url']
+            user.save()
+        else:
+            user = User(
+                email=email,
+                role=User.Role.PROVIDER,
+                display_name=google_data['display_name'],
+                avatar_url=google_data['avatar_url'],
+                is_active=True,
+                is_email_verified=True,
+            )
+            user.set_unusable_password()
+            user.save()
+ 
+        update_last_login(None, user)
+        refresh = RefreshToken.for_user(user)
+ 
+        needs_workspace = user.tenant_id is None
+ 
+        response = Response({
+            'success': True,
+            'access': str(refresh.access_token),
+            'needs_workspace': needs_workspace,
+            'user': {
+                'id': str(user.id),
+                'email': user.email,
+                'display_name': user.display_name,
+                'role': user.role,
+                'tenant_id': str(user.tenant_id) if user.tenant_id else None,
+            },
+            'tenant': {
+                'slug': user.tenant.slug if user.tenant else None,
+            },
+        }, status=status.HTTP_200_OK)
+ 
+        cookie_name = (
+            f'provider_refresh_{user.tenant.slug}'
+            if user.tenant
+            else 'refresh_token'
+        )
+        set_auth_cookies(response, refresh, cookie_name=cookie_name)
+ 
+        return response
+ 
