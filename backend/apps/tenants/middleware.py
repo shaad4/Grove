@@ -1,51 +1,49 @@
-from django.http import Http404
-from .models import Tenant
-from .manager import set_current_tenant
+from apps.tenants.models import Tenant
+from django.http import JsonResponse
 
-
+EXCLUDED_SUBDOMAINS = {"api", "www", "admin"}
 
 class TenantMiddleware:
-    """
-    Resolves the tenant from the request subdomain and sets it as
-    the current tenant for the duration of the request.
-
-    Expected host format: {slug}.yourdomain.com
-    Falls through for the grove-admin and root domain (no tenant).
-    """
-
-    EXEMPT_PATHS = ("/grove-admin/",)
-    ROOT_DOMAIN = "yourdomain.com"  #change this later
-
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        tenant = self._resolve_tenant(request)
-        set_current_tenant(tenant)
+        host = request.get_host().split(':')[0]
+        parts = host.split('.')
 
-        try:
-            response = self.get_response(request)
-        finally:
-            set_current_tenant(None)
+        is_subdomain = (
+            (len(parts) == 3) or
+            (len(parts) == 2 and parts[1] == 'localhost')
+        )
 
-        return response
-    
+        if is_subdomain and parts[0] not in EXCLUDED_SUBDOMAINS:
+            slug = parts[0]
+            try:
+                request.tenant = Tenant.objects.get(slug=slug, is_active=True)
+            except Tenant.DoesNotExist:
+                request.tenant = None
+        else:
+            request.tenant = None
 
-    def _resolve_tenant(self, request):
-        for path in self.EXEMPT_PATHS:
-            if request.path.startswith(path):
-                return None
-            
+        # Header fallback (when tenant couldn't be resolved from subdomain)
+        if request.tenant is None:
+            slug = request.headers.get("X-Tenant-Slug")
+            if slug and slug not in EXCLUDED_SUBDOMAINS:
+                try:
+                    request.tenant = Tenant.objects.get(slug=slug, is_active=True)
+                except Tenant.DoesNotExist:
+                    request.tenant = None
 
+        if (
+            request.tenant is not None and
+            hasattr(request, 'user') and
+            request.user.is_authenticated and
+            not request.user.is_superuser
+        ):
+            if request.user.tenant_id != request.tenant.id:
+                return JsonResponse(
+                    {'success': False, 'message': 'Forbidden'},
+                    status=403
+                )
 
-        host = request.get_host().split(":")[0]
-
-        if host == self.ROOT_DOMAIN or not host.endswith(f".{self.ROOT_DOMAIN}"):
-            return None
-        
-        slug = host.replace(f".{self.ROOT_DOMAIN}", "")
-
-        try:
-            return Tenant.objects.get(slug=slug)
-        except Tenant.DoesNotExist:
-            raise Http404(f"No tenant found for slug: {slug}")
+        return self.get_response(request)

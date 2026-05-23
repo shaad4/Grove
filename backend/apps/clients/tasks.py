@@ -1,0 +1,82 @@
+
+from celery import shared_task
+from django.core.mail import send_mail
+from django.conf import settings
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_client_invite_email(
+    self,
+    client_email: str,
+    client_name: str,
+    provider_name: str,
+    tenant_slug: str,
+    invite_token: str,
+):
+    
+    frontend_base = getattr(settings, "FRONTEND_BASE_URL", "http://lvh.me:5173")
+    accept_url = f"http://{tenant_slug}.{frontend_base.replace('http://', '')}/accept-invite?token={invite_token}"
+
+    subject = f"You've been invited to {provider_name}'s workspace on Grove"
+
+    message = f"""Hi {client_name},
+
+{provider_name} has invited you to their client workspace on Grove.
+
+Click the link below to set your password and get started:
+
+{accept_url}
+
+This link expires in 48 hours.
+
+If you weren't expecting this invite, you can ignore this email.
+
+— The Grove Team
+"""
+
+    html_message = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family: Inter, sans-serif; background: #F7F8F7; padding: 40px 0;">
+  <div style="max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; padding: 40px; border: 1px solid #E8EAE8;">
+    
+    <div style="margin-bottom: 32px;">
+      <span style="font-size: 20px; font-weight: 600; color: #0F6E56;">Grove</span>
+    </div>
+
+    <h1 style="font-size: 22px; font-weight: 500; color: #141A14; margin: 0 0 8px;">
+      You're invited
+    </h1>
+    <p style="font-size: 14px; color: #4A544A; margin: 0 0 32px;">
+      <strong>{provider_name}</strong> has invited you to their workspace on Grove.
+    </p>
+
+    <a href="{accept_url}"
+       style="display: inline-block; background: #0F6E56; color: #ffffff;
+              text-decoration: none; padding: 12px 24px; border-radius: 8px;
+              font-size: 14px; font-weight: 500;">
+      Accept Invite &amp; Set Password
+    </a>
+
+    <p style="font-size: 13px; color: #9EA89E; margin: 32px 0 0;">
+      This link expires in 48 hours. If you weren't expecting this, ignore this email.
+    </p>
+
+    <hr style="border: none; border-top: 1px solid #E8EAE8; margin: 32px 0;" />
+    <p style="font-size: 12px; color: #9EA89E; margin: 0;">Grove — Client Portal</p>
+  </div>
+</body>
+</html>
+"""
+
+    try:
+        send_mail(
+            subject=subject,
+            message=message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[client_email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+    except Exception as exc:
+        raise self.retry(exc=exc)

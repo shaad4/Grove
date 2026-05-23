@@ -1,122 +1,89 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 
-function App() {
-  const [count, setCount] = useState(0)
+import { AuthProvider } from './context/AuthContext'
+import { ProtectedRoute, GuestRoute, SetupRoute } from './routes/ProtectedRoute'
+import TenantRoute from './routes/TenantRoute'
+import ErrorBoundary from './ErrorBoundary'
+import { useAuth } from './context/AuthContext'
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+// Auth pages
+import LandingPage        from './pages/LandingPage'
+import SignupPage         from './pages/SignupPage'
+import VerifyEmailPage    from './pages/VerifyEmailPage'
+import WorkspaceSetupPage from './pages/WorkspaceSetupPage'
+import LoginPage          from './pages/LoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage  from './pages/ResetPasswordPage'
 
-      <div className="ticks"></div>
+// Client pages
+import AcceptInvitePage  from './pages/client/AcceptInvitePage'
+import ClientLoginPage   from './pages/client/ClientLoginPage'
+import ClientDashboard   from './pages/client/ClientDashboard'
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+// Provider pages
+import ProviderDashboard from './pages/provider/ProviderDashboard'
+import TenantGuard from './routes/TenantGuard'
+import WorkspaceNotFoundPage from './pages/WorkspaceNotFoundPage'
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+// Role-based dashboard switcher
+function RoleDashboard() {
+  const { user, loading } = useAuth()
+  if (loading) return null
+  if (user?.role === 'client')   return <ClientDashboard />
+  if (user?.role === 'provider') return <ProviderDashboard />
+  return <Navigate to="/login" replace />
 }
 
-export default App
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <TenantGuard>
+            <Routes>
+
+              {/* PUBLIC LANDING */}
+              <Route path="/" element={<LandingPage />} />
+
+              {/* PUBLIC — no auth needed, lives on provider subdomain */}
+              <Route path="/accept-invite"  element={<AcceptInvitePage />} />
+              <Route path="/client-login"   element={<ClientLoginPage />} />
+
+              {/* GUEST ROUTES — unauthenticated only */}
+              <Route element={<GuestRoute />}>
+                <Route path="/signup"          element={<SignupPage />} />
+                <Route path="/login"           element={<LoginPage />} />
+                <Route path="/verify-email"    element={<VerifyEmailPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password"  element={<ResetPasswordPage />} />
+              </Route>
+
+              {/* SETUP ROUTE — provider authenticated but no workspace yet */}
+              <Route element={<SetupRoute />}>
+                <Route path="/setup-workspace" element={<WorkspaceSetupPage />} />
+              </Route>
+
+              {/* PROTECTED TENANT ROUTES — authenticated + workspace required */}
+              <Route element={<ProtectedRoute />}>
+                <Route
+                  path="/dashboard"
+                  element={
+                    <TenantRoute>
+                      <RoleDashboard />
+                    </TenantRoute>
+                  }
+                />
+              </Route>
+
+              <Route path='/workspace-not-found' element={<WorkspaceNotFoundPage />} />
+
+              {/* 404 FALLBACK */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+
+            </Routes>
+          </TenantGuard>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
+  )
+}

@@ -1,4 +1,5 @@
 # Python
+<<<<<<< HEAD
 __pycache__/
 *.py[cod]
 *.sqlite3
@@ -53,4 +54,31 @@ htmlcov/
 *.swp
 *.swo
 
+=======
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.sqlite3
+db.sqlite3
+
+# Django
+/staticfiles/
+/mediafiles/
+
+# React
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+>>>>>>> feature/auth
 structure.txt
