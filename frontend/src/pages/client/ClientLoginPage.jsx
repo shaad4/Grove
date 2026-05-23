@@ -4,6 +4,7 @@ import GroveLogo from '../../components/layout/GroveLogo'
 import { authApi as clientApi } from '../../api/auth.api'
 import { useAuth } from '../../context/AuthContext'
 import { getSubdomain } from '../../utils/domain'
+import { Link } from "react-router-dom";
 
 export default function ClientLoginPage() {
   const { saveSession, isAuth, user } = useAuth()
@@ -97,9 +98,11 @@ export default function ClientLoginPage() {
           <div className="mt-5">
             <div className="mb-2 flex items-center justify-between">
               <label className="text-[13px] font-medium text-[#4a544a]">Password</label>
-              <button type="button" className="text-[12px] font-medium text-[#0f6e56] hover:underline">
+              <Link to="/forgot-password"
+                className="text-[12px] font-medium text-[#0f6e56] hover:underline"
+              >
                 Forgot password?
-              </button>
+              </Link>
             </div>
             <div className="relative">
               <input

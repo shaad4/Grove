@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { authApi } from '../api/auth.api'
+import { getSubdomain } from '../utils/domain'
 
 import groveLogo from "../assets/Grove_transparent_logo(Green).png";
 
@@ -10,6 +11,8 @@ export default function ForgotPasswordPage() {
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const subdomain = getSubdomain()
+  const isClientPortal = !!subdomain
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -17,7 +20,12 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      await authApi.forgotPassword(email)
+      if (isClientPortal) {
+        await authApi.clientForgotPassword(email)
+      } else {
+        await authApi.forgotPassword(email)
+      }
+
       setSent(true)
     } catch {
       setError('Something went wrong. Please try again.')
@@ -105,7 +113,7 @@ export default function ForgotPasswordPage() {
             <p className="text-[13px] text-[#9ea89e]">
               Remember your password?{' '}
               <Link
-                to="/login"
+                to={isClientPortal ? "/client-login" : "/login"}
                 className="font-medium text-[#0f6e56] hover:underline"
               >
                 Back to sign in
@@ -185,7 +193,7 @@ export default function ForgotPasswordPage() {
           <p className="text-[13px] text-[#9ea89e]">
             Remember your password?{' '}
             <Link
-              to="/login"
+              to={isClientPortal ? "/client-login" : "/login"}
               className="font-medium text-[#0f6e56] hover:underline"
             >
               Back to sign in

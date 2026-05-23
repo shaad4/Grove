@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { authApi } from '../api/auth.api'
 import groveLogo from '../assets/Grove_transparent_logo(Green).png'
+import { getSubdomain } from '../utils/domain'
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams()
@@ -12,6 +13,8 @@ export default function ResetPasswordPage() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const subdomain = getSubdomain()
+  const isClientPortal = !!subdomain
 
   // ─────────────────────────────────────────────────────────
   // PASSWORD VALIDATION
@@ -116,7 +119,12 @@ export default function ResetPasswordPage() {
     setLoading(true)
 
     try {
-      await authApi.resetPassword(token, password)
+      if (isClientPortal) {
+        await authApi.clientResetPassword(token, password)
+      } else {
+        await authApi.resetPassword(token, password)
+      }
+      
       setSuccess(true)
     } catch (err) {
       const d = err.response?.data
@@ -175,7 +183,7 @@ export default function ResetPasswordPage() {
           </div>
 
           <Link
-            to="/login"
+            to={isClientPortal ? "/client-login" : "/login"}
             className="mt-8 flex items-center justify-center w-full h-[48px] rounded-xl bg-[#0f6e56] hover:bg-[#0c5c48] text-white text-[15px] font-medium transition"
           >
             Back to sign in
@@ -323,7 +331,7 @@ export default function ResetPasswordPage() {
           <p className="text-[13px] text-[#9ea89e]">
             Remember your password?{' '}
             <Link
-              to="/login"
+              to={isClientPortal ? "/client-login" : "/login"}
               className="font-medium text-[#0f6e56] hover:underline"
             >
               Back to sign in

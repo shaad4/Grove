@@ -3,33 +3,32 @@ import { getSubdomain } from '../utils/domain'
 import { useAuth } from '../context/AuthContext'
 
 export function ProtectedRoute() {
-  const { isAuth, loading } = useAuth()
+    const { isAuth, loading, isLoggingOut } = useAuth()
 
-  if (loading) return null
+    if (loading || isLoggingOut) return null  
 
-  if (!isAuth) {
-    if (getSubdomain()) {
-      window.location.replace('http://lvh.me:5173/login')
-      return null
+    if (!isAuth) {
+        const subdomain = getSubdomain()
+        if (subdomain) {
+            window.location.replace(`http://${subdomain}.lvh.me:5173/client-login`)
+            return null
+        }
+        return <Navigate to="/login" replace />
     }
-    return <Navigate to="/login" replace />
-  }
 
-  return <Outlet />
+    return <Outlet />
 }
 
-// Guards /setup-workspace:
-// - not logged in → login
-// - logged in + workspace exists → dashboard
-// - logged in + no workspace → allow through
 export function SetupRoute() {
-  const { isAuth, tenant, loading } = useAuth()
+  const { isAuth, tenant, loading, isLoggingOut } = useAuth()  
 
-  if (loading) return null
+  if (loading || isLoggingOut) return null 
 
   if (!isAuth) {
-    if (getSubdomain()) {
-      window.location.replace('http://lvh.me:5173/login')
+    const subdomain = getSubdomain()
+    if (subdomain) {
+    
+      window.location.replace(`http://${subdomain}.lvh.me:5173/client-login`)
       return null
     }
     return <Navigate to="/login" replace />
@@ -45,7 +44,6 @@ export function SetupRoute() {
 
 export function GuestRoute() {
   const { isAuth, tenant, user, loading } = useAuth()
-  console.log('GuestRoute:', { isAuth, user, tenant, loading })
 
   if (loading) return null
 
@@ -59,7 +57,9 @@ export function GuestRoute() {
 
   if (isAuth && user?.role === 'client') {
     const subdomain = getSubdomain()
-    window.location.replace(`http://${subdomain || tenant?.slug}.lvh.me:5173/dashboard`)
+    window.location.replace(
+      `http://${subdomain || tenant?.slug}.lvh.me:5173/dashboard`
+    )
     return null
   }
 

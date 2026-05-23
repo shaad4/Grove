@@ -1,35 +1,29 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useState, useEffect } from "react";
-import Silk from "../components/ui/Silk";
-
 import {
+  ArrowRight,
+  Check,
+  Menu,
+  X,
+  Sparkles,
+  ShieldCheck,
   LayoutDashboard,
   Users,
   FolderKanban,
-  Sparkles,
-  ShieldCheck,
-  Palette,
-  ArrowRight,
-  CheckCircle2,
-  Menu,
-  X,
+  Zap,
 } from "lucide-react";
-
-import Grainient from "../components/ui/Grainient";
+import { useEffect, useState } from "react";
 
 import groveLogo from "../assets/Grove_transparent_logo(Green).png";
 
 const fadeUp = {
   hidden: {
     opacity: 0,
-    y: 40,
+    y: 30,
   },
-
   show: {
     opacity: 1,
     y: 0,
-
     transition: {
       duration: 0.7,
     },
@@ -37,7 +31,7 @@ const fadeUp = {
 };
 
 export default function LandingPage() {
-  const [mobileMenu, setMobileMenu] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [navbarBg, setNavbarBg] = useState(false);
 
   useEffect(() => {
@@ -52,76 +46,41 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="relative overflow-x-hidden scroll-smooth text-[#141a14]">
+    <div className="bg-[#f4f8f6] text-[#111111] overflow-x-hidden">
+      {/* BACKGROUND */}
+      <div className="fixed inset-0 -z-20 overflow-hidden">
+        <div className="absolute top-[-200px] left-[-150px] w-[500px] h-[500px] rounded-full bg-[#109875]/15 blur-3xl" />
 
-      {/* SILK BACKGROUND */}
-        <div className="fixed inset-0 -z-30">
+        <div className="absolute bottom-[-250px] right-[-150px] w-[500px] h-[500px] rounded-full bg-[#62d5ba]/20 blur-3xl" />
 
-        <Silk
-            speed={6}
-            scale={1.2}
-            color="#109875"
-            noiseIntensity={1.3}
-            rotation={0.2}
-        />
-
-        {/* OVERLAY */}
-        <div className="absolute inset-0 bg-[#f8fffc]/80 backdrop-blur-[100px]" />
-
-        {/* EXTRA GLOWS */}
-        <div className="absolute top-0 left-0 w-[700px] h-[700px] bg-[#109875]/10 blur-3xl rounded-full" />
-
-        <div className="absolute bottom-0 right-0 w-[700px] h-[700px] bg-[#48c9a9]/10 blur-3xl rounded-full" />
-        </div>
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff10_1px,transparent_1px),linear-gradient(to_bottom,#ffffff10_1px,transparent_1px)] bg-[size:80px_80px]" />
+      </div>
 
       {/* NAVBAR */}
       <motion.header
-        initial={{
-          y: -80,
-        }}
-        animate={{
-          y: 0,
-        }}
+        initial={{ y: -60 }}
+        animate={{ y: 0 }}
         className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
           navbarBg
-            ? "bg-white/30 backdrop-blur-2xl border-b border-white/20 shadow-lg"
+            ? "backdrop-blur-2xl bg-white/50 border-b border-white/30"
             : "bg-transparent"
         }`}
       >
-
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-
+        <div className="max-w-6xl mx-auto px-5 h-20 flex items-center justify-between">
           {/* LOGO */}
           <Link
             to="/"
-            className="relative flex items-center"
+            className="flex items-center"
           >
-
-            <motion.div
-              animate={{
-                scale: [1, 1.15, 1],
-                opacity: [0.2, 0.4, 0.2],
-              }}
-              transition={{
-                duration: 5,
-                repeat: Infinity,
-              }}
-              className="absolute inset-0 blur-3xl bg-[#109875]/30 rounded-full"
-            />
-
-            <motion.img
-              whileHover={{
-                scale: 1.05,
-              }}
+            <img
               src={groveLogo}
               alt="Grove"
-              className="relative h-14 md:h-16 object-contain"
+              className="h-12 object-contain"
             />
           </Link>
 
           {/* DESKTOP NAV */}
-          <nav className="hidden md:flex items-center gap-10 text-sm font-semibold text-gray-600">
-
+          <nav className="hidden md:flex items-center gap-10 text-sm font-medium text-neutral-600">
             <a
               href="#features"
               className="hover:text-[#109875] transition"
@@ -144,172 +103,131 @@ export default function LandingPage() {
             </a>
           </nav>
 
-          {/* CTA */}
+          {/* ACTIONS */}
           <div className="hidden md:flex items-center gap-4">
-
             <Link
               to="/login"
-              className="text-sm font-medium text-gray-600 hover:text-black transition"
+              className="text-sm font-medium text-neutral-600 hover:text-black"
             >
               Login
             </Link>
 
-            <motion.div
-              whileHover={{
-                scale: 1.03,
-              }}
-              whileTap={{
-                scale: 0.97,
-              }}
+            <Link
+              to="/signup"
+              className="bg-[#109875] hover:bg-[#0d8666] transition text-white px-5 py-3 rounded-full text-sm font-semibold shadow-lg shadow-[#109875]/20"
             >
-
-              <Link
-                to="/signup"
-                className="bg-[#109875] hover:bg-[#0d8666] text-white px-6 py-3 rounded-full font-semibold shadow-xl shadow-[#109875]/20 transition"
-              >
-                Get Started
-              </Link>
-            </motion.div>
+              Get Started
+            </Link>
           </div>
 
           {/* MOBILE */}
           <button
-            onClick={() => setMobileMenu(!mobileMenu)}
+            onClick={() => setMenuOpen(!menuOpen)}
             className="md:hidden"
           >
-            {mobileMenu ? <X /> : <Menu />}
+            {menuOpen ? <X /> : <Menu />}
           </button>
         </div>
 
         {/* MOBILE MENU */}
-        {mobileMenu && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              y: -20,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            className="md:hidden mx-4 mb-4 bg-white/90 backdrop-blur-2xl border border-white/20 rounded-3xl shadow-2xl p-6"
-          >
+        {menuOpen && (
+          <div className="md:hidden px-5 pb-5">
+            <div className="bg-white/60 backdrop-blur-2xl border border-white/30 rounded-3xl p-6 shadow-xl">
+              <div className="space-y-5">
+                <a
+                  href="#features"
+                  className="block font-medium"
+                >
+                  Features
+                </a>
 
-            <div className="space-y-5">
+                <a
+                  href="#dashboard"
+                  className="block font-medium"
+                >
+                  Dashboard
+                </a>
 
-              <a
-                href="#features"
-                className="block font-medium"
-              >
-                Features
-              </a>
+                <a
+                  href="#pricing"
+                  className="block font-medium"
+                >
+                  Pricing
+                </a>
 
-              <a
-                href="#dashboard"
-                className="block font-medium"
-              >
-                Dashboard
-              </a>
+                <Link
+                  to="/login"
+                  className="block font-medium"
+                >
+                  Login
+                </Link>
 
-              <a
-                href="#pricing"
-                className="block font-medium"
-              >
-                Pricing
-              </a>
-
-              <Link
-                to="/login"
-                className="block font-medium"
-              >
-                Login
-              </Link>
-
-              <Link
-                to="/signup"
-                className="block bg-[#109875] text-white rounded-2xl text-center py-4 font-semibold"
-              >
-                Get Started
-              </Link>
+                <Link
+                  to="/signup"
+                  className="block bg-[#109875] text-white rounded-2xl py-3 text-center font-semibold"
+                >
+                  Get Started
+                </Link>
+              </div>
             </div>
-          </motion.div>
+          </div>
         )}
       </motion.header>
 
       {/* HERO */}
-      <section className="relative pt-44 pb-28 px-6">
-
-        <div className="max-w-7xl mx-auto">
-
+      <section className="relative pt-36 md:pt-44 pb-24 px-5">
+        <div className="max-w-6xl mx-auto">
           <motion.div
             variants={fadeUp}
             initial="hidden"
             animate="show"
             className="text-center"
           >
-
-            <motion.div
-              animate={{
-                y: [0, -4, 0],
-              }}
-              transition={{
-                duration: 4,
-                repeat: Infinity,
-              }}
-              className="inline-flex items-center gap-2 bg-white/70 backdrop-blur-xl border border-[#109875]/20 px-5 py-2 rounded-full text-[#109875] text-sm font-semibold shadow-lg"
-            >
+            {/* BADGE */}
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/30 bg-white/50 backdrop-blur-xl shadow-sm text-sm font-medium text-[#109875]">
               <Sparkles size={16} />
               AI Powered Client Management
-            </motion.div>
+            </div>
 
-            <h1 className="mt-10 text-6xl md:text-8xl font-black tracking-tight leading-tight max-w-5xl mx-auto">
-              Client Management,
+            {/* TITLE */}
+            <h1 className="mt-8 text-4xl sm:text-5xl lg:text-7xl font-black tracking-tight leading-[0.95] max-w-5xl mx-auto">
+              Client Management
               <br />
 
-              <span className="bg-gradient-to-r from-[#109875] to-[#48c9a9] bg-clip-text text-transparent">
-                Without the Chaos
+              <span className="bg-gradient-to-r from-[#109875] to-[#43c5a6] bg-clip-text text-transparent">
+                Without The Chaos
               </span>
             </h1>
 
-            <p className="mt-8 text-lg md:text-xl text-gray-500 leading-9 max-w-3xl mx-auto">
-              Multi-tenant onboarding and request
-              management platform for agencies,
-              freelancers, and service providers.
+            {/* SUBTEXT */}
+            <p className="mt-7 text-neutral-600 text-lg md:text-xl max-w-2xl mx-auto leading-8">
+              Grove helps agencies and service teams
+              manage onboarding, requests, approvals
+              and clients in one beautiful workspace.
             </p>
 
-            <div className="mt-12 flex flex-col sm:flex-row justify-center gap-5">
-
-              <motion.div
-                whileHover={{
-                  scale: 1.03,
-                }}
-                whileTap={{
-                  scale: 0.97,
-                }}
+            {/* CTA */}
+            <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+              <Link
+                to="/signup"
+                className="bg-[#109875] hover:bg-[#0d8666] transition text-white px-7 py-4 rounded-full font-semibold shadow-xl shadow-[#109875]/20"
               >
+                Start Free
+              </Link>
 
-                <Link
-                  to="/signup"
-                  className="bg-[#109875] hover:bg-[#0d8666] text-white px-8 py-4 rounded-full font-semibold shadow-2xl shadow-[#109875]/30 transition"
-                >
-                  Start Free Trial
-                </Link>
-              </motion.div>
-
-              <motion.a
-                whileHover={{
-                  y: -2,
-                }}
+              <a
                 href="#dashboard"
-                className="border border-gray-300 hover:border-[#109875] hover:text-[#109875] bg-white/70 backdrop-blur-xl px-8 py-4 rounded-full font-semibold transition"
+                className="border border-white/40 bg-white/50 backdrop-blur-xl px-7 py-4 rounded-full font-semibold hover:border-[#109875] hover:text-[#109875] transition"
               >
                 Explore Dashboard
-              </motion.a>
+              </a>
             </div>
 
-            <div className="mt-12 text-sm text-gray-500">
-              Trusted by 500+ service providers
-            </div>
+            {/* TRUST */}
+            <p className="mt-6 text-sm text-neutral-500">
+              Trusted by agencies, freelancers and
+              creative teams
+            </p>
           </motion.div>
 
           {/* DASHBOARD */}
@@ -318,174 +236,119 @@ export default function LandingPage() {
             variants={fadeUp}
             initial="hidden"
             whileInView="show"
-            viewport={{
-              once: true,
-            }}
-            className="mt-28"
+            viewport={{ once: true }}
+            className="mt-20"
           >
-
-            <motion.div
-              whileHover={{
-                y: -8,
-                rotateX: 2,
-                rotateY: -2,
-              }}
-              className="relative bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[36px] overflow-hidden shadow-[0_40px_120px_rgba(0,0,0,0.08)]"
-            >
-
-              <div className="absolute top-0 right-0 w-80 h-80 bg-[#109875]/10 blur-3xl rounded-full" />
-
+            <div className="relative rounded-[36px] overflow-hidden border border-white/40 bg-white/40 backdrop-blur-2xl shadow-[0_30px_80px_rgba(0,0,0,0.08)]">
               {/* TOPBAR */}
-              <div className="h-14 border-b bg-[#fafafa]/80 flex items-center justify-between px-6">
-
+              <div className="h-14 border-b border-white/20 bg-white/40 backdrop-blur-xl flex items-center px-5">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-400" />
                   <div className="w-3 h-3 rounded-full bg-yellow-400" />
                   <div className="w-3 h-3 rounded-full bg-green-400" />
                 </div>
-
-                <div className="hidden md:block text-xs text-gray-400">
-                  app.grove.com/dashboard
-                </div>
               </div>
 
-              <div className="grid lg:grid-cols-[280px_1fr]">
-
+              <div className="grid lg:grid-cols-[260px_1fr]">
                 {/* SIDEBAR */}
-                <div className="border-r bg-[#fafafa] p-6">
-
+                <div className="border-r border-white/20 bg-white/20 backdrop-blur-xl p-6">
                   <div className="flex items-center gap-3 mb-10">
-
-                    <div className="w-11 h-11 rounded-2xl bg-[#109875] text-white flex items-center justify-center font-bold">
+                    <div className="w-12 h-12 rounded-2xl bg-[#109875] text-white flex items-center justify-center font-bold">
                       G
                     </div>
 
                     <div>
                       <h3 className="font-semibold">
-                        Design Co.
+                        Grove Workspace
                       </h3>
 
-                      <p className="text-xs text-gray-500">
-                        Workspace
+                      <p className="text-sm text-neutral-500">
+                        Team Dashboard
                       </p>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-
+                  <div className="space-y-3">
                     {[
                       {
                         icon: LayoutDashboard,
                         title: "Overview",
                         active: true,
                       },
-
                       {
                         icon: Users,
                         title: "Clients",
                       },
-
                       {
                         icon: FolderKanban,
                         title: "Requests",
                       },
                     ].map((item) => (
-                      <motion.div
-                        whileHover={{
-                          x: 4,
-                        }}
+                      <div
                         key={item.title}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl cursor-pointer transition ${
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl transition ${
                           item.active
-                            ? "bg-white shadow-sm border"
-                            : "hover:bg-white text-gray-500"
+                            ? "bg-white shadow-sm"
+                            : "hover:bg-white/40"
                         }`}
                       >
-
                         <item.icon size={18} />
 
                         <span className="font-medium text-sm">
                           {item.title}
                         </span>
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 </div>
 
                 {/* CONTENT */}
-                <div className="p-8 lg:p-10">
-
+                <div className="p-6 lg:p-10">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5 mb-8">
-
                     <div>
                       <h2 className="text-3xl font-bold">
                         Active Requests
                       </h2>
 
-                      <p className="text-gray-500 mt-2">
-                        Manage client tasks visually.
+                      <p className="text-neutral-500 mt-2">
+                        Track work, clients and approvals
+                        visually.
                       </p>
                     </div>
 
-                    <button className="bg-[#109875] hover:bg-[#0d8666] text-white px-5 py-3 rounded-2xl text-sm font-semibold shadow-lg shadow-[#109875]/20">
+                    <button className="bg-[#109875] hover:bg-[#0d8666] text-white px-5 py-3 rounded-2xl text-sm font-semibold transition">
                       New Request
                     </button>
                   </div>
 
-                  <div className="space-y-5">
-
+                  <div className="space-y-4">
                     {[
                       {
-                        title: "Brand Identity Redesign",
-                        company: "Acme Corp",
+                        title:
+                          "Website Redesign & Branding",
+                        client: "Pixel Studio",
                         status: "In Progress",
-                        color:
-                          "bg-indigo-100 text-indigo-600",
                       },
-
                       {
-                        title: "Website Copywriting",
-                        company: "TechFlow",
+                        title:
+                          "Social Media Content Plan",
+                        client: "Nova Agency",
                         status: "Review",
-                        color:
-                          "bg-orange-100 text-orange-600",
                       },
-
                       {
-                        title: "Q3 Social Assets",
-                        company: "Growth Co",
-                        status: "Done",
-                        color:
-                          "bg-green-100 text-green-600",
+                        title:
+                          "Client Portal Setup",
+                        client: "Flow Labs",
+                        status: "Completed",
                       },
-                    ].map((item, i) => (
-                      <motion.div
+                    ].map((item) => (
+                      <div
                         key={item.title}
-                        initial={{
-                          opacity: 0,
-                          y: 20,
-                        }}
-                        whileInView={{
-                          opacity: 1,
-                          y: 0,
-                        }}
-                        transition={{
-                          delay: i * 0.12,
-                        }}
-                        whileHover={{
-                          y: -4,
-                          scale: 1.01,
-                        }}
-                        className="bg-white border border-gray-200 rounded-3xl p-6 flex items-center justify-between shadow-sm hover:shadow-xl transition"
+                        className="bg-white/50 backdrop-blur-xl border border-white/30 rounded-3xl p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:shadow-lg transition"
                       >
-
-                        <div className="flex items-center gap-5">
-
+                        <div className="flex items-center gap-4">
                           <div className="w-14 h-14 rounded-2xl bg-[#109875]/10 flex items-center justify-center">
-                            <Sparkles
-                              className="text-[#109875]"
-                              size={22}
-                            />
+                            <Zap className="text-[#109875]" />
                           </div>
 
                           <div>
@@ -493,23 +356,21 @@ export default function LandingPage() {
                               {item.title}
                             </h3>
 
-                            <p className="text-gray-500 mt-1">
-                              {item.company}
+                            <p className="text-neutral-500 text-sm mt-1">
+                              {item.client}
                             </p>
                           </div>
                         </div>
 
-                        <div
-                          className={`px-4 py-2 rounded-full text-sm font-semibold ${item.color}`}
-                        >
+                        <div className="px-4 py-2 rounded-full bg-[#109875]/10 text-[#109875] text-sm font-semibold w-fit">
                           {item.status}
                         </div>
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 </div>
               </div>
-            </motion.div>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -517,89 +378,62 @@ export default function LandingPage() {
       {/* FEATURES */}
       <section
         id="features"
-        className="py-32 border-t border-gray-200/30 bg-white/20 backdrop-blur-xl px-6"
+        className="py-24 px-5"
       >
-
-        <div className="max-w-7xl mx-auto">
-
+        <div className="max-w-6xl mx-auto">
           <div className="text-center">
-
             <p className="uppercase tracking-[4px] text-[#109875] font-bold text-sm">
               Features
             </p>
 
-            <h2 className="mt-5 text-5xl font-black">
-              Everything you need
-              <br />
-              to run client work
+            <h2 className="mt-5 text-4xl md:text-5xl font-black tracking-tight">
+              Everything your team needs
             </h2>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-8 mt-20">
-
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">
             {[
               {
                 icon: ShieldCheck,
-                title: "Isolated Client Portals",
+                title: "Secure Workspaces",
                 desc:
-                  "Every client gets their own secure branded workspace.",
+                  "Dedicated tenant-based workspaces for every client.",
               },
-
               {
                 icon: FolderKanban,
-                title: "Real-Time Tracking",
+                title: "Request Tracking",
                 desc:
-                  "Track every request visually with live updates.",
+                  "Manage requests visually with real-time updates.",
               },
-
               {
-                icon: Palette,
-                title: "White Label Branding",
+                icon: Users,
+                title: "Client Portals",
                 desc:
-                  "Custom logos, domains, and colors for your business.",
+                  "Branded client experience with approvals and uploads.",
               },
-            ].map((item, i) => (
+              {
+                icon: Sparkles,
+                title: "AI Automation",
+                desc:
+                  "Automate repetitive workflows and onboarding tasks.",
+              },
+            ].map((item) => (
               <motion.div
+                whileHover={{ y: -6 }}
                 key={item.title}
-                initial={{
-                  opacity: 0,
-                  y: 40,
-                }}
-                whileInView={{
-                  opacity: 1,
-                  y: 0,
-                }}
-                transition={{
-                  delay: i * 0.15,
-                }}
-                whileHover={{
-                  y: -10,
-                }}
-                className="group relative overflow-hidden bg-white/60 backdrop-blur-xl border border-white/40 rounded-[32px] p-10 shadow-sm hover:shadow-2xl transition"
+                className="rounded-[28px] border border-white/30 bg-white/40 backdrop-blur-2xl p-7 shadow-sm"
               >
-
-                <div className="absolute top-0 right-0 w-40 h-40 bg-[#109875]/10 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition duration-500" />
-
-                <div className="relative w-16 h-16 rounded-2xl bg-[#109875]/10 flex items-center justify-center mb-8">
-
-                  <item.icon
-                    size={28}
-                    className="text-[#109875]"
-                  />
+                <div className="w-14 h-14 rounded-2xl bg-[#109875]/10 flex items-center justify-center mb-6">
+                  <item.icon className="text-[#109875]" />
                 </div>
 
-                <h3 className="text-2xl font-bold mb-5">
+                <h3 className="text-xl font-bold">
                   {item.title}
                 </h3>
 
-                <p className="text-gray-500 leading-8">
+                <p className="mt-4 text-neutral-500 leading-7 text-sm">
                   {item.desc}
                 </p>
-
-                <button className="mt-8 flex items-center gap-2 text-[#109875] font-semibold">
-                  Learn More
-                  <ArrowRight size={16} />
-                </button>
               </motion.div>
             ))}
           </div>
@@ -609,42 +443,26 @@ export default function LandingPage() {
       {/* PRICING */}
       <section
         id="pricing"
-        className="py-32 px-6"
+        className="py-24 px-5"
       >
-
-        <div className="max-w-7xl mx-auto text-center">
-
+        <div className="max-w-5xl mx-auto text-center">
           <p className="uppercase tracking-[4px] text-[#109875] font-bold text-sm">
             Pricing
           </p>
 
-          <h2 className="mt-5 text-5xl font-black">
-            Simple pricing
-            <br />
-            for growing teams
+          <h2 className="mt-5 text-4xl md:text-5xl font-black tracking-tight">
+            Simple pricing for growing teams
           </h2>
 
-          <p className="mt-6 text-gray-500 max-w-2xl mx-auto text-lg">
-            Start free and upgrade only when your
-            business grows.
-          </p>
-
-          <div className="grid lg:grid-cols-2 gap-8 mt-20">
-
+          <div className="grid lg:grid-cols-2 gap-8 mt-16">
             {/* FREE */}
-            <motion.div
-              whileHover={{
-                y: -8,
-              }}
-              className="bg-white/60 backdrop-blur-2xl border border-white/40 rounded-[36px] p-10 shadow-xl text-left"
-            >
-
+            <div className="rounded-[32px] border border-white/30 bg-white/40 backdrop-blur-2xl p-10 text-left">
               <h3 className="text-3xl font-bold">
-                Free
+                Starter
               </h3>
 
-              <p className="text-gray-500 mt-3">
-                Perfect for freelancers starting out.
+              <p className="mt-3 text-neutral-500">
+                Best for freelancers and small teams.
               </p>
 
               <div className="mt-8">
@@ -652,58 +470,43 @@ export default function LandingPage() {
                   $0
                 </span>
 
-                <span className="text-gray-500 ml-2">
+                <span className="text-neutral-500">
                   /month
                 </span>
               </div>
 
-              <div className="mt-10 space-y-5">
-
+              <div className="mt-10 space-y-4">
                 {[
                   "3 Clients",
-                  "10 Active Requests",
-                  "Real-time updates",
-                  "Client portals",
-                  "Basic branding",
-                ].map((feature) => (
+                  "Unlimited Requests",
+                  "Real-time Dashboard",
+                  "Basic Branding",
+                ].map((item) => (
                   <div
-                    key={feature}
+                    key={item}
                     className="flex items-center gap-3"
                   >
+                    <Check className="text-[#109875]" />
 
-                    <CheckCircle2
-                      size={20}
-                      className="text-[#109875]"
-                    />
-
-                    <span className="text-gray-700">
-                      {feature}
-                    </span>
+                    <span>{item}</span>
                   </div>
                 ))}
               </div>
 
               <Link
                 to="/signup"
-                className="mt-12 inline-flex bg-[#109875] text-white px-7 py-4 rounded-full font-semibold hover:bg-[#0d8666] transition"
+                className="mt-10 inline-flex bg-[#109875] text-white px-6 py-4 rounded-full font-semibold"
               >
                 Start Free
               </Link>
-            </motion.div>
+            </div>
 
             {/* PRO */}
-            <motion.div
-              whileHover={{
-                y: -8,
-              }}
-              className="relative overflow-hidden bg-[#061a15] text-white rounded-[36px] p-10 shadow-[0_40px_120px_rgba(16,152,117,0.25)] text-left"
-            >
-
-              <div className="absolute top-0 right-0 w-80 h-80 bg-[#109875]/20 blur-3xl rounded-full" />
+            <div className="rounded-[32px] border border-[#109875]/20 bg-[#061a15] text-white p-10 text-left relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-72 h-72 bg-[#109875]/20 rounded-full blur-3xl" />
 
               <div className="relative">
-
-                <div className="inline-flex bg-[#109875]/20 text-[#8ef0d4] px-4 py-2 rounded-full text-sm font-semibold">
+                <div className="inline-flex px-4 py-2 rounded-full bg-[#109875]/20 text-[#8ef0d4] text-sm font-semibold">
                   Most Popular
                 </div>
 
@@ -711,8 +514,8 @@ export default function LandingPage() {
                   Pro
                 </h3>
 
-                <p className="text-gray-300 mt-3">
-                  Built for agencies and serious teams.
+                <p className="mt-3 text-neutral-300">
+                  Advanced features for agencies.
                 </p>
 
                 <div className="mt-8">
@@ -720,152 +523,89 @@ export default function LandingPage() {
                     $29
                   </span>
 
-                  <span className="text-gray-400 ml-2">
+                  <span className="text-neutral-400">
                     /month
                   </span>
                 </div>
 
-                <div className="mt-10 space-y-5">
-
+                <div className="mt-10 space-y-4">
                   {[
-                    "Unlimited clients",
-                    "Unlimited requests",
-                    "Advanced analytics",
-                    "White-label branding",
-                    "Priority support",
-                  ].map((feature) => (
+                    "Unlimited Clients",
+                    "White-label Branding",
+                    "Team Collaboration",
+                    "Priority Support",
+                  ].map((item) => (
                     <div
-                      key={feature}
+                      key={item}
                       className="flex items-center gap-3"
                     >
+                      <Check className="text-[#43c5a6]" />
 
-                      <CheckCircle2
-                        size={20}
-                        className="text-[#48c9a9]"
-                      />
-
-                      <span className="text-gray-200">
-                        {feature}
-                      </span>
+                      <span>{item}</span>
                     </div>
                   ))}
                 </div>
 
                 <Link
                   to="/signup"
-                  className="mt-12 inline-flex bg-white text-[#061a15] px-7 py-4 rounded-full font-semibold hover:bg-gray-100 transition"
+                  className="mt-10 inline-flex bg-white text-[#061a15] px-6 py-4 rounded-full font-semibold"
                 >
-                  Upgrade to Pro
+                  Upgrade Now
                 </Link>
               </div>
-            </motion.div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="pb-24 px-5">
+        <div className="max-w-5xl mx-auto rounded-[40px] overflow-hidden border border-white/30 bg-white/40 backdrop-blur-2xl px-8 py-16 md:p-20 text-center relative">
+          <div className="absolute top-0 left-0 w-72 h-72 bg-[#109875]/10 blur-3xl rounded-full" />
+
+          <div className="relative">
+            <h2 className="text-4xl md:text-6xl font-black tracking-tight leading-tight">
+              Ready to simplify
+              <br />
+              client management?
+            </h2>
+
+            <p className="mt-6 text-neutral-600 text-lg max-w-2xl mx-auto leading-8">
+              Streamline onboarding, requests and
+              collaboration with Grove.
+            </p>
+
+            <Link
+              to="/signup"
+              className="mt-10 inline-flex items-center gap-2 bg-[#109875] hover:bg-[#0d8666] transition text-white px-8 py-4 rounded-full font-semibold shadow-xl shadow-[#109875]/20"
+            >
+              Start Free Today
+              <ArrowRight size={18} />
+            </Link>
           </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t border-white/20 bg-white/40 backdrop-blur-2xl">
+      <footer className="border-t border-white/20 bg-white/30 backdrop-blur-2xl">
+        <div className="max-w-6xl mx-auto px-5 py-10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div>
+            <img
+              src={groveLogo}
+              alt="Grove"
+              className="h-12 object-contain"
+            />
 
-        <div className="max-w-7xl mx-auto px-6 py-14">
-
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-10">
-
-            <div>
-
-              <img
-                src={groveLogo}
-                alt="Grove"
-                className="h-12 object-contain"
-              />
-
-              <p className="mt-5 text-gray-500 max-w-md leading-7">
-                Modern multi-tenant client onboarding
-                and request management platform for
-                agencies, freelancers, and service
-                providers.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-10 text-sm">
-
-              <div className="space-y-4">
-
-                <h4 className="font-bold text-black">
-                  Product
-                </h4>
-
-                <div className="space-y-3 text-gray-500">
-
-                  <a href="#features">
-                    Features
-                  </a>
-
-                  <a href="#dashboard">
-                    Dashboard
-                  </a>
-
-                  <a href="#pricing">
-                    Pricing
-                  </a>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-
-                <h4 className="font-bold text-black">
-                  Company
-                </h4>
-
-                <div className="space-y-3 text-gray-500">
-
-                  <a>
-                    About
-                  </a>
-
-                  <a>
-                    Careers
-                  </a>
-
-                  <a>
-                    Contact
-                  </a>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-
-                <h4 className="font-bold text-black">
-                  Legal
-                </h4>
-
-                <div className="space-y-3 text-gray-500">
-
-                  <a>
-                    Privacy
-                  </a>
-
-                  <a>
-                    Terms
-                  </a>
-
-                  <a>
-                    Security
-                  </a>
-                </div>
-              </div>
-            </div>
+            <p className="mt-4 text-neutral-500 text-sm">
+              Modern client onboarding and request
+              management platform.
+            </p>
           </div>
 
-          <div className="mt-14 pt-8 border-t border-white/20 flex flex-col md:flex-row md:items-center md:justify-between gap-5 text-sm text-gray-500">
-
-            <p>
-              © 2026 Grove. All rights reserved.
-            </p>
-
-            <p>
-              Built with React, Django, Redis &
-              WebSockets
-            </p>
+          <div className="flex flex-wrap gap-6 text-sm text-neutral-500">
+            <a href="#features">Features</a>
+            <a href="#dashboard">Dashboard</a>
+            <a href="#pricing">Pricing</a>
           </div>
         </div>
       </footer>
