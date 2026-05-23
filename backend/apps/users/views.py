@@ -455,6 +455,8 @@ class MeView(APIView):
 
             "tenant": user.tenant and {
                 "slug": user.tenant.slug,
+                "name": user.tenant.name,
+                "logo_url": user.tenant.logo_url,
             } or None
         })
         
