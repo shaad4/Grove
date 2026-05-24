@@ -284,6 +284,12 @@ class LoginView(APIView):
                 {"success": False, "message": "No provider account found for this workspace."},
                 status=400,
             )
+        
+
+        membership_count = TenantMembership.objects.filter(
+            user=user,
+            is_active=True,
+        ).count()
 
 
         update_last_login(None, user)
@@ -295,6 +301,7 @@ class LoginView(APIView):
             "access":  str(refresh.access_token),
             "user":    _build_user_payload(user, membership),
             "tenant":  _build_tenant_payload(tenant),
+            "membership_count": membership_count, 
         })
 
         cookie_name = f"provider_refresh_{tenant.slug}" if tenant else "refresh_token"
@@ -453,7 +460,12 @@ class GoogleAuthView(APIView):
             user=user,
             role=TenantMembership.Role.PROVIDER,
         ).select_related("tenant").first()
- 
+
+        membership_count = TenantMembership.objects.filter(
+            user=user,
+            is_active=True,
+        ).count()
+        
         needs_workspace = provider_membership is None
         tenant = provider_membership.tenant if provider_membership else None
  
@@ -463,9 +475,47 @@ class GoogleAuthView(APIView):
             "needs_workspace": needs_workspace,
             "user":           _build_user_payload(user, provider_membership),
             "tenant":         _build_tenant_payload(tenant),
+            "membership_count": membership_count, 
         })
  
         cookie_name = f"provider_refresh_{tenant.slug}" if tenant else "refresh_token"
         set_auth_cookies(response, refresh, cookie_name=cookie_name)
         return response
+    
+
+class MembershipsView(APIView):
+    """
+    GET /auth/memberships/
+
+    Returns all portals the logged-in user belongs to,
+    split by role. Used by grove.co/portals picker screen
+    and the portal switcher component.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        memberships = (
+            TenantMembership.objects
+            .filter(user=request.user, is_active=True)
+            .select_related("tenant", "tenant__plan")
+        )
+
+        provider_portals = []
+        client_portals   = []
+
+        for m in memberships:
+            portal = {
+                "tenant_name": m.tenant.name,
+                "tenant_slug": m.tenant.slug,
+                "tenant_logo": m.tenant.logo_url,
+            }
+            if m.role == TenantMembership.Role.PROVIDER:
+                provider_portals.append(portal)
+            else:
+                client_portals.append(portal)
+
+        return Response({
+            "provider_portals": provider_portals,
+            "client_portals":   client_portals,
+        })
  

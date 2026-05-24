@@ -118,7 +118,7 @@ class LoginSerializer(serializers.Serializer):
 
 
 
-class ForgetPasswordSerializer(serializers.Serializer):
+class ForgotPasswordSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def validate_email(self, value):
