@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from apps.tenants.models import Tenant
+from apps.tenants.models import Tenant, TenantMembership
 from apps.users.models import User
 
 # Create your models here.
@@ -9,7 +9,6 @@ from apps.users.models import User
 class Client(models.Model):
     """
     Represents a client account within a tenant's workspace.
-    Each client has a linked User (role=client) and belongs to one provider.
     """  
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -19,8 +18,14 @@ class Client(models.Model):
         related_name="clients",
     )
 
-    user = models.OneToOneField(
+    user = models.ForeignKey(
         User,
+        on_delete=models.CASCADE,
+        related_name="client_profiles",   
+    )
+
+    membership = models.OneToOneField(
+        TenantMembership,
         on_delete=models.CASCADE,
         related_name="client_profile",
     )
@@ -60,6 +65,8 @@ class Invite(models.Model):
     """
     Tracks a pending client invite sent by a provider.
     Token is emailed to the client; used to accept and activate their account.
+        - If their email already exists globally - create membership only
+        - If their email is new - create User + membership in one transaction
     """
 
     class Status(models.TextChoices):

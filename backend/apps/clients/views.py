@@ -1,15 +1,20 @@
-from django.shortcuts import render
+from django.contrib.auth.models import update_last_login
+from django.utils import timezone
+
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.utils import timezone
-from apps.users.models import User
-from django.contrib.auth.models import update_last_login
 
-
+from apps.tenants.models import TenantMembership
 from apps.users.utils import set_auth_cookies
+from apps.users.repositories import UserRepository
+from apps.users.services import PasswordResetService, InvalidOrExpiredToken
+from apps.notifications.tasks import send_password_reset_email
+
+from .models import Client
+from .repositories import ClientRepository, InviteRepository
 from .serializers import (
     AddClientSerializer,
     AcceptInviteSerializer,
@@ -17,40 +22,28 @@ from .serializers import (
     ClientForgotPasswordSerializer,
     ClientResetPasswordSerializer,
 )
-
 from .services import (
     ClientService,
     ClientLimitExceeded,
     DuplicateClientEmail,
     InvalidInviteToken,
     ExpiredInviteToken,
-    InvalidResetToken,
-    ExpiredResetToken,
-    ClientPasswordResetService,
 )
-
-from .repositories import ClientRepository, InviteRepository
 from .tasks import send_client_invite_email
-from apps.notifications.tasks import send_password_reset_email
 
-# Create your views here.
+
+def _require_provider(request):
+    membership = getattr(request, "tenant_membership", None)
+    return membership is not None and membership.role == TenantMembership.Role.PROVIDER
 
 
 class ClientListCreateView(APIView):
-    """
-    GET  /clients/  — provider lists all their clients
-    POST /clients/ — provider adds a new client(sends invite email)
-    """
-
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        if request.user.role != "provider":
-            return Response(
-                {"success": False, "message": "Forbidden"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        
+        if not _require_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+
         clients = ClientRepository.get_all_for_tenant(request.tenant.id)
         serializer = ClientListSerializer(clients, many=True)
 
@@ -58,55 +51,40 @@ class ClientListCreateView(APIView):
             "success": True,
             "data": {
                 "clients": serializer.data,
-                "total": clients.count(),
-            }
+                "total":   clients.count(),
+            },
         })
-    
 
     def post(self, request):
-        if request.user.role != "provider":
-            return Response(
-                {"success": False, "message": "Forbidden"},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        
+        if not _require_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+
         tenant = getattr(request, "tenant", None)
         if not tenant:
-            return Response(
-                {"success": False, "message": "Invalid workspace."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        
+            return Response({"success": False, "message": "Invalid workspace."}, status=400)
+
         serializer = AddClientSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         try:
             result = ClientService.invite_client(
-                tenant=request.tenant,
+                tenant=tenant,
                 provider=request.user,
                 client_name=serializer.validated_data["client_name"],
                 client_email=serializer.validated_data["client_email"],
-
             )
         except ClientLimitExceeded as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            return Response({"success": False, "message": str(e)}, status=403)
         except DuplicateClientEmail as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=status.HTTP_409_CONFLICT,
-            )
-        
+            return Response({"success": False, "message": str(e)}, status=409)
+
         invite = result["invite"]
-        client = result["client"]
 
         send_client_invite_email.delay(
             client_email=invite.client_email,
             client_name=invite.client_name,
             provider_name=request.user.display_name,
-            tenant_slug=request.tenant.slug,
+            tenant_slug=tenant.slug,
             invite_token=str(invite.token),
         )
 
@@ -115,27 +93,25 @@ class ClientListCreateView(APIView):
                 "success": True,
                 "message": f"Invite sent to {invite.client_email}.",
                 "data": {
-                    "client_id": str(client.id),
                     "email": invite.client_email,
-                    "name": invite.client_name,
+                    "name":  invite.client_name,
                 },
             },
             status=status.HTTP_201_CREATED,
         )
 
 
+
 class ValidateInviteTokenView(APIView):
+
     permission_classes = [AllowAny]
 
     def get(self, request):
         token = request.query_params.get("token")
 
         if not token:
-            return Response(
-                    {"valid": False, "message": "Token is required."},
-                    status=400,
-                )
-        
+            return Response({"valid": False, "message": "Token is required."}, status=400)
+
         invite = InviteRepository.get_pending_by_token(token)
 
         if not invite:
@@ -143,31 +119,30 @@ class ValidateInviteTokenView(APIView):
                 {"valid": False, "message": "This invite link is invalid or has already been used."},
                 status=400,
             )
-        
+
         if invite.expires_at < timezone.now():
             return Response(
                 {"valid": False, "message": "This invite link has expired. Ask your provider to resend it."},
                 status=400,
             )
-        
+
+        already_has_account = UserRepository.email_exists(invite.client_email)
+
         return Response({
             "valid": True,
             "data": {
-                "client_name": invite.client_name,
-                "client_email": invite.client_email,
-                "provider_name": invite.provider.display_name,
-                "workspace_name": invite.tenant.name,
-                "tenant_slug": invite.tenant.slug,
-            }
+                "client_name":        invite.client_name,
+                "client_email":       invite.client_email,
+                "provider_name":      invite.provider.display_name,
+                "workspace_name":     invite.tenant.name,
+                "tenant_slug":        invite.tenant.slug,
+                "already_has_account": already_has_account, 
+            },
         })
-    
+
+
 
 class AcceptInviteView(APIView):
-    """
-    POST /clients/invite/accept/
-    Client sets their password and activates their account.
-    Returns JWT so they're immediately logged in.
-    """
 
     permission_classes = [AllowAny]
 
@@ -180,21 +155,14 @@ class AcceptInviteView(APIView):
                 token=str(serializer.validated_data["token"]),
                 password=serializer.validated_data["password"],
             )
-
         except InvalidInviteToken as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=400,
-            )
+            return Response({"success": False, "message": str(e)}, status=400)
         except ExpiredInviteToken as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=400,
-            )
-        
+            return Response({"success": False, "message": str(e)}, status=400)
 
         user = result["user"]
         tenant = result["tenant"]
+        membership = result.get("membership")
 
         refresh = RefreshToken.for_user(user)
 
@@ -204,34 +172,29 @@ class AcceptInviteView(APIView):
             "data": {
                 "access": str(refresh.access_token),
                 "user": {
-                    "id": str(user.id),
-                    "email": user.email,
+                    "id":           str(user.id),
+                    "email":        user.email,
                     "display_name": user.display_name,
-                    "role": user.role,
+                    "role":         membership.role if membership else "client",
                 },
                 "tenant": {
                     "slug": tenant.slug,
                     "name": tenant.name,
                 },
-            }
-        }, status=status.HTTP_200_OK)
+            },
+        })
 
         set_auth_cookies(response, refresh, cookie_name=f"client_refresh_{tenant.slug}")
-
         return response
-    
+
+
 
 class ClientLoginView(APIView):
-    """
-    POST /clients/login/
-    Subdomain-aware login for clients only.
-    The tenant is resolved by TenantMiddleware from the subdomain.
-    """
     
     permission_classes = [AllowAny]
 
     def post(self, request):
-        email = request.data.get("email", "").lower().strip()
+        email    = request.data.get("email", "").lower().strip()
         password = request.data.get("password", "")
 
         if not email or not password:
@@ -239,103 +202,86 @@ class ClientLoginView(APIView):
                 {"success": False, "message": "Email and password are required."},
                 status=400,
             )
-        
+
         tenant = getattr(request, "tenant", None)
         if not tenant:
-            return Response(
-                {"success": False, "message": "Invalid workspace."},
-                status=400,
-            )
-        
-        try:
-            user = User.objects.get(
-                email=email,
-                tenant=tenant,
-                role=User.Role.CLIENT,
-            )
-        except User.DoesNotExist:
-            return Response(
-                {"success": False, "message": "Invalid email or password."},
-                status=400,
-            )
-        
-        if not user.check_password(password):
-            return Response(
-                {"success": False, "message": "Invalid email or password."},
-                status=400,
-            ) 
-        
+            return Response({"success": False, "message": "Invalid workspace."}, status=400)
+
+        user = UserRepository.get_by_email(email)
+        if user is None or not user.check_password(password):
+            return Response({"success": False, "message": "Invalid email or password."}, status=400)
+
         if not user.is_active:
             return Response(
-                {"success": False, "message": "Your account is not active yet. Please check your invite email."},
+                {"success": False, "message": "Your account is not active."},
                 status=400,
             )
-        
-        if user.client_profile.is_deactivated:
+
+        membership = TenantMembership.objects.filter(
+            user=user,
+            tenant=tenant,
+            role=TenantMembership.Role.CLIENT,
+            is_active=True,
+        ).first()
+
+        if membership is None:
+            return Response(
+                {"success": False, "message": "Invalid email or password."},
+                status=400,
+            )
+
+        try:
+            client_profile = Client.objects.get(user=user, tenant=tenant, is_deleted=False)
+        except Client.DoesNotExist:
+            return Response({"success": False, "message": "Invalid email or password."}, status=400)
+
+        if client_profile.is_deactivated:
             return Response(
                 {"success": False, "message": "Your access has been deactivated. Contact your provider."},
                 status=400,
             )
-        
-        update_last_login(None, user)
 
+        update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
 
         response = Response({
             "success": True,
-            "access": str(refresh.access_token),
+            "access":  str(refresh.access_token),
             "user": {
-                "id": str(user.id),
-                "email": user.email,
+                "id":           str(user.id),
+                "email":        user.email,
                 "display_name": user.display_name,
-                "role": user.role,
-                "tenant_id": str(user.tenant_id),
+                "role":         membership.role,
             },
             "tenant": {
                 "slug": tenant.slug,
                 "name": tenant.name,
-            }
+            },
         })
 
         set_auth_cookies(response, refresh, cookie_name=f"client_refresh_{tenant.slug}")
-
         return response
-        
 
-
-        
 
 
 class ClientForgotPasswordView(APIView):
-    """
-    POST /clients/forgot-password/
-    Subdomain-scoped — tenant resolved by middleware.
-    Sends a reset link to the client's email if found.
-    """
-
     permission_classes = [AllowAny]
 
     def post(self, request):
         tenant = getattr(request, "tenant", None)
         if not tenant:
-            return Response(
-                {"success": False, "message": "Invalid workspace."},
-                status=400,
-            )
-            
+            return Response({"success": False, "message": "Invalid workspace."}, status=400)
+
         serializer = ClientForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = ClientPasswordResetService.request_reset(
-            email=serializer.validated_data["email"],
-            tenant=tenant,
-        )
+        result = PasswordResetService.request_reset(email=serializer.validated_data["email"])
 
         if result:
             send_password_reset_email.delay(
                 user_email=result["user"].email,
                 display_name=result["user"].display_name,
-                token=str(result['reset_token'].token),
+                token=str(result["reset_token"].token),
                 tenant_slug=tenant.slug,
             )
 
@@ -345,14 +291,7 @@ class ClientForgotPasswordView(APIView):
         })
 
 
-        
 class ClientResetPasswordView(APIView):
-    """
-    POST /clients/reset-password/
-    Token is not tenant-scoped — the token itself is globally unique (UUID).
-    No tenant middleware needed here.
-    """
-
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -360,22 +299,11 @@ class ClientResetPasswordView(APIView):
         serializer.is_valid(raise_exception=True)
 
         try:
-            ClientPasswordResetService.confirm_reset(
-                token=serializer.validated_data["token"],
+            PasswordResetService.confirm_reset(
+                token_value=serializer.validated_data["token"],
                 new_password=serializer.validated_data["password"],
             )
-        except InvalidResetToken as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=400,
-            )
-        except ExpiredResetToken as e:
-            return Response(
-                {"success": False, "message": str(e)},
-                status=400,
-            )
-        
-        return Response({
-            "success": True,
-            "message": "Password reset successfully.",
-        })
+        except InvalidOrExpiredToken as e:
+            return Response({"success": False, "message": str(e)}, status=400)
+
+        return Response({"success": True, "message": "Password reset successfully."})
