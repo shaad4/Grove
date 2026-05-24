@@ -19,3 +19,4 @@ export const getSubdomain = () => {
 export const isTenantDomain = () => {
   return !!getSubdomain()
 }
+
