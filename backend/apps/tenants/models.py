@@ -5,13 +5,13 @@ from django.db import models
 class Plan(models.Model):
     """Subscription plan. Seeded via data migration (free + pro)."""
 
-    id            = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name          = models.CharField(max_length=50, unique=True)   # "free" | "pro"
-    client_limit  = models.IntegerField(default=3)
-    request_limit = models.IntegerField(default=10)                # -1 = unlimited
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=50, unique=True)   
+    client_limit = models.IntegerField(default=3)
+    request_limit = models.IntegerField(default=10)      
     price_monthly = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    is_active     = models.BooleanField(default=True)
-    created_at    = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "plans"
@@ -27,24 +27,24 @@ class Tenant(models.Model):
     Identified on every request by subdomain slug (e.g. arjundev.grove.co).
     """
 
-    id                    = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    plan                  = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="tenants")
-    name                  = models.CharField(max_length=255)
-    slug                  = models.SlugField(max_length=63, unique=True)
-    logo_url              = models.TextField(null=True, blank=True)
-    is_active             = models.BooleanField(default=True)
-    is_suspended          = models.BooleanField(default=False)
-    white_label_enabled   = models.BooleanField(default=False)
-    custom_status_labels  = models.JSONField(null=True, blank=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plan = models.ForeignKey(Plan, on_delete=models.PROTECT, related_name="tenants")
+    name = models.CharField(max_length=255)
+    slug = models.SlugField(max_length=63, unique=True)
+    logo_url = models.TextField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    is_suspended = models.BooleanField(default=False)
+    white_label_enabled = models.BooleanField(default=False)
+    custom_status_labels = models.JSONField(null=True, blank=True)
     client_limit_override = models.IntegerField(null=True, blank=True)
-    created_at            = models.DateTimeField(auto_now_add=True)
-    updated_at            = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "tenants"
         indexes  = [
-            models.Index(fields=["slug"],      name="idx_tenants_slug"),
-            models.Index(fields=["plan"],      name="idx_tenants_plan_id"),
+            models.Index(fields=["slug"], name="idx_tenants_slug"),
+            models.Index(fields=["plan"], name="idx_tenants_plan_id"),
             models.Index(fields=["is_active"], name="idx_tenants_is_active"),
         ]
 
@@ -64,24 +64,8 @@ class Tenant(models.Model):
 
 class TenantMembership(models.Model):
     """
-    *** NEW IN V2 ***
-
-    Replaces the old `users.tenant` FK + `users.role` field pattern.
-
-    In v1, each user belonged to exactly one tenant and had one role baked
-    into the user row.  That broke when a client worked with two providers —
-    they needed two separate user accounts.
-
-    In v2 a user can have multiple memberships (one per tenant they belong to).
+    user can have multiple memberships (one per tenant they belong to).
     Role is stored here, not on the user.
-
-    Examples
-    --------
-    - Arjun (provider) has ONE membership: (arjun_user, arjundev_tenant, "provider")
-    - Meera (client)   has TWO memberships if she works with two agencies:
-        (meera_user, agencyA_tenant, "client")
-        (meera_user, agencyB_tenant, "client")
-
     The middleware validates membership on every authenticated request.
     """
 
@@ -89,20 +73,22 @@ class TenantMembership(models.Model):
         PROVIDER = "provider", "Provider"
         CLIENT   = "client",   "Client"
 
-    id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user       = models.ForeignKey(
+
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
         "users.User",
         on_delete=models.CASCADE,
         related_name="memberships",
     )
-    tenant     = models.ForeignKey(
+    tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,
         related_name="memberships",
     )
-    role       = models.CharField(max_length=20, choices=Role.choices)
-    is_active  = models.BooleanField(default=True)
-    joined_at  = models.DateTimeField(auto_now_add=True)
+    role = models.CharField(max_length=20, choices=Role.choices)
+    is_active = models.BooleanField(default=True)
+    joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "tenant_memberships"
@@ -115,7 +101,7 @@ class TenantMembership(models.Model):
         ]
         indexes = [
             models.Index(fields=["tenant"], name="idx_memberships_tenant_id"),
-            models.Index(fields=["role"],   name="idx_memberships_role"),
+            models.Index(fields=["role"], name="idx_memberships_role"),
         ]
 
     def __str__(self):
@@ -128,13 +114,13 @@ class TenantUsage(models.Model):
     Updated by signals / Celery tasks, never calculated live.
     """
 
-    id                      = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant                  = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="usage")
-    client_count            = models.IntegerField(default=0)
-    active_request_count    = models.IntegerField(default=0)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="usage")
+    client_count = models.IntegerField(default=0)
+    active_request_count = models.IntegerField(default=0)
     total_requests_lifetime = models.IntegerField(default=0)
-    total_delivered_lifetime= models.IntegerField(default=0)
-    updated_at              = models.DateTimeField(auto_now=True)
+    total_delivered_lifetime = models.IntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "tenant_usage"
