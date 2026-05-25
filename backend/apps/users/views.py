@@ -265,48 +265,101 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = LoginSerializer(data = request.data)
-
+        serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
-        user = serializer.validated_data['user']
 
-        tenant = getattr(request, "tenant", None)
+        user   = serializer.validated_data['user']
+        tenant = getattr(request, 'tenant', None)
 
-        try:
-            membership = ProviderLoginService.resolve_provider_membership(
-                user=user, tenant=tenant
+        #Workspace login (subdomain) 
+        if tenant is not None:
+            # Try provider first, then client
+            membership = TenantMembership.objects.filter(
+                user=user,
+                tenant=tenant,
+                is_active=True,
+            ).first()
+
+            if membership is None:
+                return Response(
+                    {"success": False, "message": "No account found for this workspace."},
+                    status=400,
+                )
+
+            update_last_login(None, user)
+            refresh = RefreshToken.for_user(user)
+
+            response = Response({
+                "success": True,
+                "access":  str(refresh.access_token),
+                "user":    _build_user_payload(user, membership),
+                "tenant":  _build_tenant_payload(tenant),
+                "membership_count": 1,  # workspace login always goes direct, no picker
+            })
+            cookie_name = (
+                f"provider_refresh_{tenant.slug}"
+                if membership.role == TenantMembership.Role.PROVIDER
+                else f"client_refresh_{tenant.slug}"
             )
+            set_auth_cookies(response, refresh, cookie_name=cookie_name)
+            return response
 
-        except NoProviderMembership:
-            return Response(
-                {"success": False, "message": "No provider account found for this workspace."},
-                status=400,
-            )
-        
-
-        membership_count = TenantMembership.objects.filter(
+        # Global login (root domain) 
+        memberships = TenantMembership.objects.filter(
             user=user,
             is_active=True,
-        ).count()
+        ).select_related('tenant')
 
+        membership_count = memberships.count()
+
+        if membership_count == 0:
+            # Verified user but no workspace yet — needs setup
+            refresh = RefreshToken.for_user(user)
+            response = Response({
+                "success":         True,
+                "access":          str(refresh.access_token),
+                "needs_workspace": True,
+                "user":            _build_user_payload(user, None),
+                "tenant":          None,
+                "membership_count": 0,
+            })
+            set_auth_cookies(response, refresh)
+            return response
+
+        # Pick the primary membership to build user payload
+        # Prefer provider role so a user who is both lands on their workspace
+        primary = (
+            memberships.filter(role=TenantMembership.Role.PROVIDER).first()
+            or memberships.first()
+        )
+        primary_tenant = primary.tenant if membership_count == 1 else None
 
         update_last_login(None, user)
-
         refresh = RefreshToken.for_user(user)
 
+        cookie_name = (
+            f"provider_refresh_{primary.tenant.slug}"
+            if primary.role == TenantMembership.Role.PROVIDER
+            else f"client_refresh_{primary.tenant.slug}"
+        )
+
         response = Response({
-            "success": True,
-            "access":  str(refresh.access_token),
-            "user":    _build_user_payload(user, membership),
-            "tenant":  _build_tenant_payload(tenant),
-            "membership_count": membership_count, 
+            "success":          True,
+            "access":           str(refresh.access_token),
+            "user":             _build_user_payload(user, primary),
+            "tenant":           _build_tenant_payload(primary_tenant),
+            "membership_count": membership_count,
         })
 
-        cookie_name = f"provider_refresh_{tenant.slug}" if tenant else "refresh_token"
-        set_auth_cookies(response, refresh,  cookie_name=cookie_name )
+        for m in memberships:
+            slug = m.tenant.slug
+            role_prefix = "provider" if m.role == TenantMembership.Role.PROVIDER else "client"
+            set_auth_cookies(response, refresh, cookie_name=f"{role_prefix}_refresh_{slug}")
 
+
+        set_auth_cookies(response, refresh, cookie_name="refresh_token")
+        
         return response
     
 
@@ -366,14 +419,18 @@ class MeView(APIView):
         membership = getattr(request, "tenant_membership", None)
         tenant     = getattr(request, "tenant", None)
 
-
+        print(f"MeView: user={user.email}, membership={membership}, tenant={tenant}")
         if membership is None and tenant is None:
             membership = TenantMembership.objects.filter(
                 user=user,
-                role=TenantMembership.Role.PROVIDER,
-            ).select_related("tenant").first()
+                is_active=True,
+            ).select_related("tenant").order_by(
+                "-role"
+            ).first()
             if membership:
                 tenant = membership.tenant
+
+        print(f"MeView: resolved role={membership.role if membership else 'none'}, tenant={tenant}")
  
         return Response({
             "user":   _build_user_payload(user, membership),

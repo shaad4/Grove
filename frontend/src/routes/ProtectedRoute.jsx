@@ -2,64 +2,100 @@ import { Navigate, Outlet } from 'react-router-dom'
 import { getSubdomain } from '../utils/domain'
 import { useAuth } from '../context/AuthContext'
 
-export function ProtectedRoute() {
-    const { isAuth, loading, isLoggingOut } = useAuth()
+// ─── Helpers ──────────────────────────────────────────────────
 
-    if (loading || isLoggingOut) return null  
+const BASE_DOMAIN = import.meta.env.VITE_APP_DOMAIN || 'lvh.me'
+const PORT        = import.meta.env.VITE_PORT        || '5173'
+const IS_PROD     = import.meta.env.PROD
 
-    if (!isAuth) {
-        const subdomain = getSubdomain()
-        if (subdomain) {
-            window.location.replace(`http://${subdomain}.lvh.me:5173/client-login`)
-            return null
-        }
-        return <Navigate to="/login" replace />
-    }
-
-    return <Outlet />
+function subdomainUrl(slug, path) {
+  if (IS_PROD) return `https://${slug}.${BASE_DOMAIN}${path}`
+  return `http://${slug}.${BASE_DOMAIN}:${PORT}${path}`
 }
 
-export function SetupRoute() {
-  const { isAuth, tenant, loading, isLoggingOut } = useAuth()  
+// ─── ProtectedRoute ───────────────────────────────────────────
+// Requires authentication. Unauthenticated users go to the
+// correct login page based on whether a subdomain is present.
 
-  if (loading || isLoggingOut) return null 
+export function ProtectedRoute() {
+  const { isAuth, loading } = useAuth()
+  if (loading) return null
 
   if (!isAuth) {
     const subdomain = getSubdomain()
+
     if (subdomain) {
-    
-      window.location.replace(`http://${subdomain}.lvh.me:5173/client-login`)
+      const isClientPath = window.location.pathname.startsWith('/portal')
+      if (isClientPath) {
+        window.location.replace(subdomainUrl(subdomain, '/client-login'))
+      } else {
+        window.location.replace(`http://${BASE_DOMAIN}:${PORT}/login`)
+      }
       return null
     }
-    return <Navigate to="/login" replace />
-  }
 
-  if (tenant?.slug) {
-    window.location.replace(`http://${tenant.slug}.lvh.me:5173/dashboard`)
-    return null
+    return <Navigate to="/login" replace />
   }
 
   return <Outlet />
 }
 
+// ─── GuestRoute ───────────────────────────────────────────────
+// Redirects already-authenticated users away from auth pages.
+
 export function GuestRoute() {
-  const { isAuth, tenant, user, loading } = useAuth()
-
+  const { isAuth, user, tenant, loading } = useAuth()
   if (loading) return null
+  if (!isAuth) return <Outlet />
 
-  if (isAuth && user?.role === 'provider') {
-    if (!tenant?.slug) {
-      return <Navigate to="/setup-workspace" replace />
+  if (user?.role === 'provider') {
+    if (tenant?.slug) {
+      window.location.replace(subdomainUrl(tenant.slug, '/dashboard'))
+      return null
     }
-    window.location.replace(`http://${tenant.slug}.lvh.me:5173/dashboard`)
-    return null
+    return <Navigate to="/setup-workspace" replace />
   }
 
-  if (isAuth && user?.role === 'client') {
+  if (user?.role === 'client') {
+    const slug = getSubdomain() || tenant?.slug
+    if (slug) {
+      window.location.replace(subdomainUrl(slug, '/portal'))
+      return null
+    }
+    return <Navigate to="/portals" replace />
+  }
+
+  return <Navigate to="/portals" replace />
+}
+
+// ─── SetupRoute ───────────────────────────────────────────────
+// For users who are authenticated but have no provider workspace yet.
+//
+// Who can reach this:
+//   - Provider who just verified email (no workspace yet)
+//   - Client-only user who clicked "Create your own workspace"
+//
+// Who gets ejected:
+//   - Unauthenticated users
+//   - Anyone who already has a provider workspace (tenant.slug is set)
+
+export function SetupRoute() {
+  const { isAuth, user, tenant, loading } = useAuth()
+  if (loading) return null
+
+  if (!isAuth) {
     const subdomain = getSubdomain()
-    window.location.replace(
-      `http://${subdomain || tenant?.slug}.lvh.me:5173/dashboard`
-    )
+    if (subdomain) {
+      window.location.replace(subdomainUrl(subdomain, '/client-login'))
+      return null
+    }
+    return <Navigate to="/login" replace />
+  }
+
+  // Only eject if they are a provider — clients are allowed through
+  // to create their own workspace regardless of tenant in Redux
+  if (user?.role === 'provider' && tenant?.slug) {
+    window.location.replace(subdomainUrl(tenant.slug, '/dashboard'))
     return null
   }
 

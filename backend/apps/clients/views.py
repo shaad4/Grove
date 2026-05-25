@@ -153,7 +153,7 @@ class AcceptInviteView(APIView):
         try:
             result = ClientService.accept_invite(
                 token=str(serializer.validated_data["token"]),
-                password=serializer.validated_data["password"],
+                password=serializer.validated_data.get("password"),
             )
         except InvalidInviteToken as e:
             return Response({"success": False, "message": str(e)}, status=400)

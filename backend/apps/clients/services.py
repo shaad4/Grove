@@ -98,6 +98,11 @@ class ClientService:
                 return {"user": user, "tenant": tenant, "client": client}
         else:
             #brand new user, set password from invite form
+            if not password:
+                raise InvalidInviteToken(
+                    "Password is required for new accounts."
+                )
+
             user = UserRepository.create_client_user(
                 email=email,
                 password=password,

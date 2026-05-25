@@ -13,7 +13,8 @@ class AddClientSerializer(serializers.Serializer):
 
 class AcceptInviteSerializer(serializers.Serializer):
     token = serializers.UUIDField()
-    password = serializers.CharField(write_only=True, min_length=8)
+    password = serializers.CharField(write_only=True, min_length=8, required=False, allow_null=True)
+
 
     def validate_password(self, value):
         validate_password(value)

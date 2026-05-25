@@ -6,6 +6,10 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 
 EXCLUDED_SUBDOMAINS = {"api", "www", "admin"}
 
+SKIP_MEMBERSHIP_CHECK_PATHS = {
+    '/api/auth/token/refresh/',
+    '/api/auth/logout/',
+}
 
 class TenantMiddleware:
     def __init__(self, get_response):
@@ -47,7 +51,11 @@ class TenantMiddleware:
                 if result is not None:
                     auth_user, _ = result
             except Exception:
-                pass  # invalid token — let the view handle it
+                pass
+
+        # Skip membership enforcement for token/auth endpoints
+        if request.path in SKIP_MEMBERSHIP_CHECK_PATHS:
+            return self.get_response(request)
 
         if auth_user is not None and not auth_user.is_superuser:
             membership = TenantMembership.objects.filter(
