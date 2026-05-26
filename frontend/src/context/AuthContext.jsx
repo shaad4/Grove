@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { setLoggingOut } from '../api/interceptors/authResponseInterceptor'
 import {
   setCredentials,
   setMemberships,
@@ -29,6 +30,8 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
+    setLoggingOut(true)
+    
     try { await authApi.logout() } catch (_) {}
 
     const role      = user?.role

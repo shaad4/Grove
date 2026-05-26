@@ -347,16 +347,11 @@ export default function PortalsPage() {
 
   }
 
+
   if (!memberships) {
     return (
-      <div
-        className="loading-screen"
-        role="status"
-        aria-label="Loading portals"
-      >
-
+      <div className="loading-screen" role="status" aria-label="Loading portals">
         <div className="loading-spinner" />
-
       </div>
     )
   }
@@ -612,6 +607,53 @@ export default function PortalsPage() {
           background: #F7FAF9;
         }
 
+        .workspace-prompt {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 4px 12px 16px;
+          padding: 14px 16px;
+          background: #F0F7F4;
+          border: 1px solid #C8E6DC;
+          border-radius: 14px;
+        }
+
+        .workspace-prompt-text {
+          min-width: 0;
+        }
+
+        .workspace-prompt-title {
+          font-size: 13.5px;
+          font-weight: 600;
+          color: #0A2E24;
+          margin: 0 0 2px;
+        }
+
+        .workspace-prompt-sub {
+          font-size: 12px;
+          color: #6B9E8A;
+          margin: 0;
+        }
+
+        .workspace-prompt-btn {
+          flex-shrink: 0;
+          font-size: 12.5px;
+          font-weight: 600;
+          color: #fff;
+          background: #0F6E56;
+          border: none;
+          border-radius: 9px;
+          padding: 8px 14px;
+          cursor: pointer;
+          transition: background 0.15s ease;
+          white-space: nowrap;
+        }
+
+        .workspace-prompt-btn:hover {
+          background: #0C5B48;
+        }
+
         .empty-state {
           display: flex;
           flex-direction: column;
@@ -773,9 +815,13 @@ export default function PortalsPage() {
 
             </h1>
 
-            <p className="greeting-sub">
-              Choose a portal to open.
-            </p>
+           <p className="greeting-sub">
+            {hasProvider
+              ? 'Choose a portal to open.'
+              : hasClient && !hasProvider
+              ? 'Your portals and workspace options.'
+              : 'Get started with Grove.'}
+          </p>
 
           </div>
 
@@ -859,35 +905,23 @@ export default function PortalsPage() {
 
           {/* CTA */}
 
+        
           {!hasProvider && hasAny && (
 
-            <button
-              className="create-cta"
-              onClick={() =>
-                window.location.href = '/setup-workspace'
-              }
-            >
-
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="none"
+            <div className="workspace-prompt">
+              <div className="workspace-prompt-text">
+                <p className="workspace-prompt-title">Start your own workspace</p>
+                <p className="workspace-prompt-sub">
+                  Manage clients and requests with your own Grove portal.
+                </p>
+              </div>
+              <button
+                className="workspace-prompt-btn"
+                onClick={() => window.location.href = '/setup-workspace'}
               >
-
-                <path
-                  d="M8 2v12M2 8h12"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-
-              </svg>
-
-              Create your own workspace
-
-            </button>
-
+                Get started free
+              </button>
+            </div>
           )}
 
           {/* FOOTER */}

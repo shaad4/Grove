@@ -19,7 +19,13 @@ function subdomainUrl(slug, path) {
 
 export function ProtectedRoute() {
   const { isAuth, loading } = useAuth()
-  if (loading) return null
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F8F7]">
+        <div className="h-8 w-8 rounded-full border-2 border-[#D4E9E2] border-t-[#0F6E56] animate-spin" />
+      </div>
+    )
+  }
 
   if (!isAuth) {
     const subdomain = getSubdomain()
@@ -45,7 +51,13 @@ export function ProtectedRoute() {
 
 export function GuestRoute() {
   const { isAuth, user, tenant, loading } = useAuth()
-  if (loading) return null
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F8F7]">
+        <div className="h-8 w-8 rounded-full border-2 border-[#D4E9E2] border-t-[#0F6E56] animate-spin" />
+      </div>
+    )
+  }
   if (!isAuth) return <Outlet />
 
   if (user?.role === 'provider') {
@@ -57,11 +69,16 @@ export function GuestRoute() {
   }
 
   if (user?.role === 'client') {
-    const slug = getSubdomain() || tenant?.slug
-    if (slug) {
-      window.location.replace(subdomainUrl(slug, '/portal'))
+
+    const subdomain = getSubdomain()
+
+    if (subdomain) {
+      window.location.replace(
+        subdomainUrl(subdomain, '/portal')
+      )
       return null
     }
+
     return <Navigate to="/portals" replace />
   }
 
@@ -81,7 +98,13 @@ export function GuestRoute() {
 
 export function SetupRoute() {
   const { isAuth, user, tenant, loading } = useAuth()
-  if (loading) return null
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F7F8F7]">
+        <div className="h-8 w-8 rounded-full border-2 border-[#D4E9E2] border-t-[#0F6E56] animate-spin" />
+      </div>
+    )
+  }
 
   if (!isAuth) {
     const subdomain = getSubdomain()

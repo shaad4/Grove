@@ -11,6 +11,8 @@ import { setMemberships } from '../features/auth/authSlice'
 import { authApi } from '../api/auth.api'
 import groveLogo from '../assets/Grove_transparent_logo(Green).png'
 
+import { setLoggingOut } from '../api/interceptors/authResponseInterceptor'
+
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
@@ -27,17 +29,14 @@ async function redirectAfterLogin(data, dispatch, saveSession) {
 
   saveSession({ accessToken: access, user, tenant })
 
-  if (membership_count === 1 && tenant?.slug) {
-    // Single membership — go straight there by role
-    const path = user.role === 'provider' ? '/dashboard' : '/portal'
-    window.location.replace(`http://${tenant.slug}.lvh.me:5173${path}`)
+  if (membership_count === 1 && user.role == 'provider' && tenant?.slug) {
+    window.location.replace(`http://${tenant.slug}.lvh.me:5173/dashboard`)
     return
   }
 
-  // 0 memberships handled by needs_workspace check before this is called
-  // Multiple memberships — fetch list and show picker
+ 
   try {
-    const res = await authApi.getMemberships()
+    const res = await authApi.getMemberships(access)
     dispatch(setMemberships(res.data))
   } catch (_) {}
 
@@ -63,6 +62,8 @@ export default function LoginPage() {
       setError('')
       try {
         const { data } = await authApi.googleAuth(tokenResponse.access_token)
+
+        setLoggingOut(false)
 
         if (data.needs_workspace) {
           saveSession({ accessToken: data.access, user: data.user, tenant: null })
@@ -101,6 +102,8 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const { data } = await authApi.login({ email, password })
+
+      setLoggingOut(false)
 
       if (data.needs_workspace) {
         saveSession({ accessToken: data.access, user: data.user, tenant: null })

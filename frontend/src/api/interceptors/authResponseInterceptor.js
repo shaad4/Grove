@@ -1,6 +1,12 @@
 import { setAccessToken, clearAuth } from '../../features/auth/authSlice'
 import { getSubdomain } from "../../utils/domain"
 
+let isLoggingOut = false
+
+export const setLoggingOut = (value) => {
+    isLoggingOut = value
+}
+
 let isRefreshing = false
 let pendingQueue = []
 
@@ -11,6 +17,10 @@ const rejectQueue = (error) =>
     pendingQueue.forEach(({ reject }) => reject(error))
 
 export const authResponseInterceptor = async (_store, api, error) => {
+    if (isLoggingOut) {
+        return Promise.reject(error)
+    }
+    
     const original = error.config
 
     const is401         = error.response?.status === 401

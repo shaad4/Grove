@@ -443,31 +443,44 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        tenant = getattr(request, 'tenant', None)
 
-        if tenant:
-            refresh_token = (
-                request.COOKIES.get(f"client_refresh_{tenant.slug}") or
-                request.COOKIES.get(f"provider_refresh_{tenant.slug}")
-            )
-        else:
-            refresh_token = request.COOKIES.get("refresh_token")
+        # Blacklist any available refresh token
+        all_tokens = []
 
+        for key, value in request.COOKIES.items():
 
+            if (
+                key == "refresh_token"
+                or key.startswith("provider_refresh_")
+                or key.startswith("client_refresh_")
+            ):
+                all_tokens.append(value)
 
-        if refresh_token:
+        for token in all_tokens:
             try:
-                RefreshToken(refresh_token).blacklist()
+                RefreshToken(token).blacklist()
             except Exception:
                 pass
 
-        response = Response({"success": True, "message": "Logged Out."})
-        
-        if tenant:
-            response.delete_cookie(f"client_refresh_{tenant.slug}", domain=".lvh.me", path="/")
-            response.delete_cookie(f"provider_refresh_{tenant.slug}", domain=".lvh.me", path="/")
-        else:
-            response.delete_cookie("refresh_token", domain=".lvh.me", path="/")
+        response = Response({
+            "success": True,
+            "message": "Logged Out."
+        })
+
+        # Delete ALL auth cookies
+        for key in request.COOKIES.keys():
+
+            if (
+                key == "refresh_token"
+                or key.startswith("provider_refresh_")
+                or key.startswith("client_refresh_")
+            ):
+
+                response.delete_cookie(
+                    key,
+                    domain=".lvh.me",
+                    path="/",
+                )
 
         return response
     
