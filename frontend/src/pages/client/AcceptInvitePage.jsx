@@ -5,7 +5,7 @@ import {
   ArrowRight, Check, Eye, EyeOff,
   Lock, MessageCircle, TrendingUp, Upload, AlertTriangle,
 } from 'lucide-react'
-import GroveLogo from '../../components/layout/GroveLogo'
+import groveLogo from '../../assets/Grove_transparent_logo(White).png'
 import { authApi as clientApi } from '../../api/auth.api'
 import { useAuth } from '../../context/AuthContext'
 
@@ -214,35 +214,225 @@ export default function AcceptInvitePage() {
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
 
+      
       {/* LEFT PANEL */}
-      <div className="relative hidden lg:flex w-[42%] overflow-hidden bg-[#041c16]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(15,110,86,0.9)_0%,rgba(10,46,36,1)_55%,rgba(4,28,22,1)_100%)]" />
-        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-10 py-10">
-          <GroveLogo size="md" variant="full" dark />
+      <div className="relative hidden lg:flex w-[44%] overflow-hidden bg-[#031712]">
 
-          <div className="mx-auto flex w-full max-w-[420px] flex-col items-center">
-            <div className="flex h-[74px] w-[74px] items-center justify-center rounded-full bg-[#1d9e75] text-[28px] font-semibold tracking-wide text-white">
-              {providerInitials}
+        {/* Background layers */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(29,158,117,0.28)_0%,rgba(15,110,86,0.16)_28%,rgba(3,23,18,1)_72%)]" />
+
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.015),transparent)]" />
+
+        {/* Glow */}
+        <div className="absolute left-[-120px] top-[120px] h-[320px] w-[320px] rounded-full bg-[#1d9e75]/20 blur-[120px]" />
+
+        <div className="absolute bottom-[-100px] right-[-80px] h-[260px] w-[260px] rounded-full bg-[#0f6e56]/20 blur-[100px]" />
+
+        {/* Content */}
+        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-12 py-10">
+
+          {/* Top */}
+          <div className="flex w-full items-center justify-start">
+            <img
+              src={groveLogo}
+              alt="Grove"
+              className="h-8 w-auto object-contain opacity-95"
+            />
+          </div>
+
+          {/* Center */}
+          <div className="mx-auto flex w-full max-w-[460px] flex-col items-center">
+
+            {/* Provider identity */}
+            <div className="relative">
+
+              {/* Glow ring */}
+              <div className="absolute inset-0 rounded-full bg-[#1d9e75]/30 blur-2xl" />
+
+              {/* Avatar */}
+              <div className="
+                relative
+
+                flex h-[88px] w-[88px]
+                items-center justify-center
+
+                rounded-[28px]
+
+                border border-white/10
+
+                bg-[linear-gradient(135deg,#1d9e75,#0f6e56)]
+
+                text-[32px]
+                font-semibold
+                tracking-wide
+                text-white
+
+                shadow-[0_10px_40px_rgba(0,0,0,0.25)]
+              ">
+                {providerInitials}
+              </div>
             </div>
-            <h2 className="mt-5 text-center text-[32px] font-semibold text-white">
-              {inviteData?.workspace_name}
-            </h2>
-            <p className="mt-3 text-center text-[16px] text-[#b3e0d1]">
-              has invited you to their Grove workspace
-            </p>
 
-            <div className="mt-12 w-full rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <Feature icon={<Upload size={14} />}      title="Submit requests"   desc="One place for all your work" />
-              <Divider />
-              <Feature icon={<TrendingUp size={14} />}  title="Track progress"    desc="Live status updates on every request" />
-              <Divider />
-              <Feature icon={<MessageCircle size={14} />} title="Message directly" desc={`Chat with ${inviteData?.provider_name} without switching apps`} />
+            {/* Heading */}
+            <div className="mt-8 text-center">
+              <p className="
+                text-[12px]
+                font-medium
+                uppercase
+                tracking-[0.18em]
+                text-[#7fd8ba]
+              ">
+                You've been invited
+              </p>
+
+              <h2 className="
+                mt-4
+
+                text-[42px]
+                font-semibold
+
+                tracking-[-1.6px]
+
+                leading-[1.05]
+
+                text-white
+              ">
+                {inviteData?.workspace_name}
+              </h2>
+
+              <p className="
+                mt-5
+
+                text-[17px]
+                leading-8
+
+                text-[#9fd6c3]
+              ">
+                Collaborate, submit requests, track progress,
+                and communicate with your provider —
+                all in one focused workspace.
+              </p>
+            </div>
+
+            {/* Features */}
+            <div className="
+              mt-14
+
+              w-full
+
+              rounded-[28px]
+
+              border border-white/10
+
+              bg-white/[0.045]
+
+              p-7
+
+              shadow-[0_12px_40px_rgba(0,0,0,0.18)]
+
+              backdrop-blur-xl
+            ">
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <Upload size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Submit requests
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Organize all project requests in one secure place.
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-6 h-px w-full bg-white/10" />
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <TrendingUp size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Track progress
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Follow updates, delivery stages, and approvals in real time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-6 h-px w-full bg-white/10" />
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <MessageCircle size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Communicate clearly
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Stay aligned with {inviteData?.provider_name} without scattered emails.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-2 text-[12px] text-[#6ba898]">
-            <Lock size={11} />
-            <span>Your portal is private and secured</span>
+          {/* Bottom */}
+          <div className="
+            flex items-center gap-2
+
+            text-[12px]
+
+            text-[#76bca6]
+          ">
+            <Lock size={12} />
+
+            <span>
+              Private workspace · Secure access · Powered by Grove
+            </span>
           </div>
         </div>
       </div>
@@ -404,7 +594,7 @@ export default function AcceptInvitePage() {
 
           {/* Footer */}
           <div className="mt-7 flex items-center justify-center gap-2">
-            <GroveLogo size="sm" variant="icon" />
+            
             <span className="text-[12px] text-[#9ea89e]">Powered by Grove</span>
           </div>
           <p className="mt-4 text-center text-[12px] text-[#9ea89e]">
