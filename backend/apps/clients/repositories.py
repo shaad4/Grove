@@ -1,148 +1,134 @@
 from django.utils import timezone
-from .models import Client, Invite
-from apps.users.models import PasswordResetToken
+from .models import Client, Invite, Tag, ClientTagMap
+from apps.tenants.models import Tenant
+
+
+class TagRepository:
+
+    @staticmethod
+    def get_or_create(tenant, name, color=None):
+        tag,_ = Tag.objects.get_or_create(
+            tenant=tenant,
+            name=name.strip(),
+            defaults={"color" : color},
+        )
+        return tag
+    
+    @staticmethod
+    def get_all_for_tenant(tenant_id):
+        return Tag.objects.filter(tenant_id=tenant_id).order_by("name")
+    
+    @staticmethod
+    def set_client_tags(client, tag_name, tenant):
+        """Replace all tags on a client with the given list of tag names."""
+        ClientTagMap.objects.filter(client=client).delete()
+        for name in tag_name:
+            tag = TagRepository.get_or_create(tenant=tenant, name=name.strip())
+            ClientTagMap.objects.get_or_create(client=client, tag=tag)
+
+
 
 class ClientRepository:
 
     @staticmethod
-    def get_active_count(tenant_id):
-        """How many non-deleted clients does this tenant have?"""
-        return Client.objects.filter(
-            tenant_id=tenant_id,
-            is_deleted = False,
-        ).count()
-    
-
-    @staticmethod
     def get_all_for_tenant(tenant_id):
-        """
-        All active (non-deleted) clients for a tenant,
-        with user data prefetched to avoid N+1.
-        """
-
+        """Active, non-deleted clients for a tenant. Includes related user data."""
         return (
-            Client.objects.filter(
-                tenant_id=tenant_id,
-                is_deleted=False,
-            )
-            .select_related("user")
+            Client.objects
+            .filter(tenant_id=tenant_id, is_deleted=False)
+            .prefetch_related("tag_maps__tag")
+            .select_related("user", "membership")
             .order_by("-created_at")
         )
 
-
     @staticmethod
     def get_by_id(client_id, tenant_id):
-        """Fetch a single client, scoped to the tenant."""
+        return (
+            Client.objects
+            .filter(id=client_id, tenant_id=tenant_id, is_deleted=False)
+            .select_related("user", "membership")
+            .first()
+        )
 
-        try:
-            return Client.objects.select_related("user").get(
-                id=client_id,
-                tenant_id=tenant_id,
-                is_deleted = False,
-            )
-        except Client.DoesNotExist:
-            return None
-        
     @staticmethod
-    def email_exists_in_tenant(email, tenant_id):
-        """Check if a client with this email already exists in the tenant."""
+    def email_exists_in_tenant(email: str, tenant_id):
+        """
+        Check if a user with this email already has a client profile in this tenant.
+        Used to prevent duplicate invites.
+        """
         return Client.objects.filter(
             tenant_id=tenant_id,
-            user__email=email,
+            user__email=email.lower().strip(),
             is_deleted=False,
+            status=Client.Status.ACTIVE,
         ).exists()
     
+
     @staticmethod
-    def create(tenant, user, provider):
+    def create_pending(tenant, provider, client_name, business_type=None, private_note=None):
+        """Create a pending Client record before invite is accepted."""
         return Client.objects.create(
             tenant=tenant,
-            user=user,
-            provider=provider
+            provider=provider,
+            user=None,
+            membership=None,
+            status=Client.Status.PENDING,
+            business_type=business_type,
+            private_note=private_note,
         )
     
+    @staticmethod
+    def activate(client, user, membership):
+        """Called on invite acceptance — fills in user, membership, flips status"""
+        client.user = user
+        client.membership = membership
+        client.status = Client.Status.ACTIVE
+        client.joined_at = timezone.now()
+        client.save(update_fields=["user", "membership", "status", "joined_at", "updated_at"])
+        return client
+    
+    @staticmethod
+    def get_pending_by_invite(invite):
+        """Find the pending Client row that was created when this invite was sent."""
+        return Client.objects.filter(
+            tenant=invite.tenant,
+            provider=invite.provider,
+            status=Client.Status.PENDING,
+            user__isnull=True,
+        ).first()
+
 
 class InviteRepository:
 
+    @staticmethod
+    def get_pending_by_token(token_value):
+        return (
+            Invite.objects
+            .filter(token=token_value, status=Invite.Status.PENDING)
+            .select_related("tenant", "provider")
+            .first()
+        )
 
     @staticmethod
-    def get_pending_by_token(token):
-        """
-        Fetch a pending invite by token, with tenant + provider prefetched.
-        Returns None if not found.
-        """
-        try:
-            return Invite.objects.select_related("tenant", "provider").get(
-                token=token,
-                status=Invite.Status.PENDING,
-            )
-        except Invite.DoesNotExist:
-            return None
-        
-
-    @staticmethod
-    def has_pending_invite(email, tenant_id):
-        """Check if a pending (non-expired) invite already exists for this email."""
+    def has_pending_invite(email: str, tenant_id):
         return Invite.objects.filter(
-            client_email=email,
+            client_email=email.lower().strip(),
             tenant_id=tenant_id,
             status=Invite.Status.PENDING,
-            expires_at__gt=timezone.now(),
         ).exists()
-    
+
     @staticmethod
-    def expire_existing(email, tenant_id):
-        """Cancel any existing pending invites for this email in this tenant."""
-        Invite.objects.filter(
-            client_email=email,
-            tenant_id=tenant_id,
-            status=Invite.Status.PENDING,
-        ).update(status=Invite.Status.CANCELLED)
-    
-    @staticmethod
-    def create(tenant, provider, client_email, client_name, expires_at):
+    def create(tenant, provider, client_email, client_name):
         return Invite.objects.create(
             tenant=tenant,
             provider=provider,
-            client_email=client_email,
+            client_email=client_email.lower().strip(),
             client_name=client_name,
-            expires_at=expires_at,
+            expires_at=timezone.now() + timezone.timedelta(hours=48),
         )
-    
+
     @staticmethod
     def mark_accepted(invite):
         invite.status = Invite.Status.ACCEPTED
         invite.accepted_at = timezone.now()
         invite.save(update_fields=["status", "accepted_at"])
-
-
-
-class PasswordResetRepository:
-
-    @staticmethod
-    def expire_pending(user):
-        PasswordResetToken.objects.filter(
-            user=user,
-            status=PasswordResetToken.Status.PENDING,
-        ).update(status=PasswordResetToken.Status.EXPIRED)
-
-
-    @staticmethod
-    def create(user, expires_at):
-        return PasswordResetToken.objects.create(
-            user =  user,
-            expires_at = expires_at,
-        )
-    
-    @staticmethod
-    def get_pending_by_token(token):
-        try:
-            return PasswordResetToken.objects.select_related("user").get(
-                token=token,
-                status=PasswordResetToken.Status.PENDING,
-            )
-        except PasswordResetToken.DoesNotExist:
-            return None
-
-
-
-

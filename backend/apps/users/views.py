@@ -1,77 +1,104 @@
-from django.shortcuts import render
-from .models import EmailVerificationToken, PasswordResetToken, User
 import uuid
-
-# Create your views here.
-
+from django.contrib.auth.models import update_last_login
+from django.utils import timezone
+ 
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from rest_framework_simplejwt.exceptions import TokenError
-
+ 
 from apps.notifications.tasks import send_verification_email, send_password_reset_email
-from .serializers import ProviderSignupSerializer, WorkspaceSetupSerializer, LoginSerializer, ForgetPasswordSerializer, ResetPasswordSerializer, GoogleAuthSerializer
-from apps.tenants.models import Tenant,Plan,TenantUsage
-from django.contrib.auth.models import update_last_login
-
-
+from apps.tenants.models import TenantMembership, Tenant
+ 
+from .models import User
+from .repositories import UserRepository
+from .serializers import (
+    ProviderSignupSerializer,
+    WorkspaceSetupSerializer,
+    LoginSerializer,
+    ForgotPasswordSerializer,
+    ResetPasswordSerializer,
+    GoogleAuthSerializer,
+)
+from .services import (
+    ProviderSignupService,
+    ProviderLoginService,
+    PasswordResetService,
+    InvalidOrExpiredToken,
+    NoProviderMembership,
+)
 from .utils import set_auth_cookies
-from django.utils import timezone
+ 
+
+#Helpers
+def _build_user_payload(user, membership):
+    """
+    Build the standard user object returned in every auth response
+    """
+
+    payload = {
+        "id" : str(user.id),
+        "email": user.email,
+        "display_name": user.display_name,
+    }
+    if membership:
+        payload["role"] = membership.role
+
+    return payload
 
 
-# def _get_tokens_for_user(user):
-#     refresh = RefreshToken.for_user(user)
+def _build_tenant_payload(tenant):
+    if tenant is None:
+       return None
+    return {
+        "id" : str(tenant.id),
+        "name" : tenant.name,
+        "slug" : tenant.slug,
+    } 
 
-#     return {
-#         "access": str(refresh.access_token),
-#         "refresh": str(refresh),
-#     }
 
 class RefreshTokenView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Try tenant from middleware (subdomain resolution) first
-        tenant = getattr(request, 'tenant', None)
-        
-        # Fallback: slug hint from request body
-        slug_hint = request.data.get('slug')
-        if not tenant and slug_hint:
-            try:
-                from apps.tenants.models import Tenant
-                tenant = Tenant.objects.get(slug=slug_hint, is_active=True)
-            except Tenant.DoesNotExist:
-                pass
-
+        tenant = getattr(request, "tenant", None)
+ 
         if tenant:
             refresh_token = (
                 request.COOKIES.get(f"client_refresh_{tenant.slug}") or
                 request.COOKIES.get(f"provider_refresh_{tenant.slug}")
             )
         else:
-            refresh_token = request.COOKIES.get("refresh_token")
-
+            slug_hint = request.data.get("slug")
+            if slug_hint:
+                try:
+                    t = Tenant.objects.get(slug=slug_hint, is_active=True)
+                    refresh_token = (
+                        request.COOKIES.get(f"client_refresh_{t.slug}") or
+                        request.COOKIES.get(f"provider_refresh_{t.slug}")
+                    )
+                except Tenant.DoesNotExist:
+                    refresh_token = None
+            else:
+                refresh_token = request.COOKIES.get("refresh_token")
+ 
         if not refresh_token:
             return Response(
                 {"success": False, "message": "No refresh token found."},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
-
+ 
         try:
             refresh = RefreshToken(refresh_token)
             access_token = str(refresh.access_token)
-            
-            # Set updated cookie if rotation is on
-            response = Response({"success": True, "access": access_token})
-            return response
-
+            return Response({"success": True, "access": access_token})
         except Exception:
             return Response(
-                {"success": False, "message": "Invalid refresh token."},
-                status=status.HTTP_401_UNAUTHORIZED
+                {"success": False, "message": "Invalid or expired session."},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
+
 
 class ProviderSignupView(APIView):
     """
@@ -86,16 +113,12 @@ class ProviderSignupView(APIView):
         serializer = ProviderSignupSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        result = serializer.save()
-
-        user = result["user"]
-        verification_token = result["verification_token"]
-
+        result = ProviderSignupService.register(**serializer.validated_data)
 
         send_verification_email.delay(
-            user_email = user.email,
-            display_name = user.display_name,
-            token = str(verification_token.token),
+            user_email = result["user"].email,
+            display_name = result["user"].display_name,
+            token = str(result["verification_token"].token),
         )
 
 
@@ -104,7 +127,7 @@ class ProviderSignupView(APIView):
                 "success": True,
                 "message": "Verification email sent.",
                 "data": {
-                    "email": user.email,
+                    "email": result["user"].email,
                     "requires_verification": True,
                 },
             },
@@ -119,18 +142,15 @@ class VerifyEmailAPIView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        token = request.data.get("token")
+        raw = request.data.get("token")
+
+        if not raw:
+            return Response({"success": False, "message": "Token required."}, status=400)
+        
 
 
-        if not token:
-            return Response(
-                {"success": False, "message": "Token required"},
-                status=400
-            )
-
-        # Convert string -> UUID
         try:
-            token = uuid.UUID(token)
+            token_value = uuid.UUID(raw)
         except ValueError:
             return Response(
                 {"success": False, "message": "Invalid token format"},
@@ -139,75 +159,26 @@ class VerifyEmailAPIView(APIView):
 
 
         try:
-            verification_token = EmailVerificationToken.objects.get(
-                token=token,
-                status=EmailVerificationToken.Status.PENDING
-            )
+            result = ProviderSignupService.verify_email(token_value=token_value)
+        except InvalidOrExpiredToken as e:
+            return Response({"success": False, "message": str(e)}, status=400)
 
 
-        except EmailVerificationToken.DoesNotExist:
-        
-        
-            return Response(
-                {"success": False, "message": "Invalid token"},
-                status=400
-            )
-        if verification_token.expires_at < timezone.now():
-
-            verification_token.status = (
-                EmailVerificationToken.Status.EXPIRED
-            )
-
-            verification_token.save()
-
-            return Response(
-                {
-                    "success": False,
-                    "message": "Token expired"
-                },
-                status=400
-            )
-
-        user = verification_token.user
-
-        user.is_active = True
-        user.is_email_verified = True
-        user.save()
-
-        
-        # expire OTHER tokens only
-        EmailVerificationToken.objects.filter(
-            user=user,
-            status=EmailVerificationToken.Status.PENDING
-        ).exclude(
-            id=verification_token.id
-        ).update(
-            status=EmailVerificationToken.Status.EXPIRED
-        )
-
-        verification_token.status = EmailVerificationToken.Status.USED
-        verification_token.used_at = timezone.now()
-        verification_token.save()
+        user = result["user"]
 
         refresh = RefreshToken.for_user(user)
 
+
+
         response = Response({
             "success": True,
-            "message": "Email verified successfully",
+            "message": "Email verified. Please set up your workspace.",
             "data": {
                 "access": str(refresh.access_token),
-
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "display_name": user.display_name,
-                    "role": user.role,
-                },
-
-                "tenant": {
-                    "slug": user.tenant.slug if user.tenant else None,
-                }
-            }
+                "user":   _build_user_payload(user, membership=None),
+                "tenant": None,
+                "needs_workspace": True,
+            },
         })
 
         set_auth_cookies(response, refresh)
@@ -227,51 +198,36 @@ class WorkspaceSetupAPIView(APIView):
 
         user = request.user
 
-        if user.tenant:
+        already_provider = TenantMembership.objects.filter(
+            user = user,
+            role = TenantMembership.Role.PROVIDER,
+        ).exists()
+
+        if already_provider:
             return Response(
-                {
-                    "success": False,
-                    "message": "Workspace already exists."
-                },
-                status=400
+                {"success": False, "message": "Workspace already exists."},
+                status=400,
             )
         
-        free_plan = Plan.objects.get(name="free")
-
-        tenant = Tenant.objects.create(
-            plan=free_plan,
-            name=serializer.validated_data["business_name"],
-            slug=serializer.validated_data["slug"],
+        result = ProviderSignupService.setup_workspace(
+            user=user,
+            buisness_name=serializer.validated_data["business_name"],
+            slug = serializer.validated_data["slug"]
         )
 
-        TenantUsage.objects.create(
-            tenant=tenant
-        )
-
-        user.tenant = tenant
-        user.save()
+        tenant = result["tenant"]
+        membership = result["membership"]
 
         refresh = RefreshToken.for_user(user)
 
         response = Response({
             "success": True,
-            "message": "Workspace created successfully",
+            "message": "Workspace created successfully.",
             "data": {
-
-                "access": str(refresh.access_token),
-
-                "tenant": {
-                    "id": str(tenant.id),
-                    "name": tenant.name,
-                    "slug": tenant.slug,
-                },
-
-                "user": {
-                    "id": str(user.id),
-                    "email": user.email,
-                    "display_name": user.display_name,
-                }
-            }
+                "access":     str(refresh.access_token),
+                "user":       _build_user_payload(user, membership),
+                "tenant":     _build_tenant_payload(tenant),
+            },
         })
 
         set_auth_cookies(response, refresh, cookie_name=f"provider_refresh_{tenant.slug}")
@@ -284,7 +240,7 @@ class CheckSlugAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        slug = request.query_params.get("slug")
+        slug = request.query_params.get("slug", "").lower().strip()
 
         if not slug:
             return Response(
@@ -294,8 +250,6 @@ class CheckSlugAPIView(APIView):
                 },
                 status=400
             )
-
-        slug = slug.lower().strip()
 
         exists = Tenant.objects.filter(
             slug=slug
@@ -311,40 +265,101 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = LoginSerializer(
-            data = request.data,
-        )
-
+        serializer = LoginSerializer(data=request.data)
         if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        user   = serializer.validated_data['user']
+        tenant = getattr(request, 'tenant', None)
+
+        #Workspace login (subdomain) 
+        if tenant is not None:
+            # Try provider first, then client
+            membership = TenantMembership.objects.filter(
+                user=user,
+                tenant=tenant,
+                is_active=True,
+            ).first()
+
+            if membership is None:
+                return Response(
+                    {"success": False, "message": "No account found for this workspace."},
+                    status=400,
+                )
+
+            update_last_login(None, user)
+            refresh = RefreshToken.for_user(user)
+
+            response = Response({
+                "success": True,
+                "access":  str(refresh.access_token),
+                "user":    _build_user_payload(user, membership),
+                "tenant":  _build_tenant_payload(tenant),
+                "membership_count": 1,  # workspace login always goes direct, no picker
+            })
+            cookie_name = (
+                f"provider_refresh_{tenant.slug}"
+                if membership.role == TenantMembership.Role.PROVIDER
+                else f"client_refresh_{tenant.slug}"
             )
-        
-        user =serializer.validated_data['user']
+            set_auth_cookies(response, refresh, cookie_name=cookie_name)
+            return response
+
+        # Global login (root domain) 
+        memberships = TenantMembership.objects.filter(
+            user=user,
+            is_active=True,
+        ).select_related('tenant')
+
+        membership_count = memberships.count()
+
+        if membership_count == 0:
+            # Verified user but no workspace yet — needs setup
+            refresh = RefreshToken.for_user(user)
+            response = Response({
+                "success":         True,
+                "access":          str(refresh.access_token),
+                "needs_workspace": True,
+                "user":            _build_user_payload(user, None),
+                "tenant":          None,
+                "membership_count": 0,
+            })
+            set_auth_cookies(response, refresh)
+            return response
+
+        # Pick the primary membership to build user payload
+        # Prefer provider role so a user who is both lands on their workspace
+        primary = (
+            memberships.filter(role=TenantMembership.Role.PROVIDER).first()
+            or memberships.first()
+        )
+        primary_tenant = primary.tenant if membership_count == 1 else None
 
         update_last_login(None, user)
-
         refresh = RefreshToken.for_user(user)
 
+        cookie_name = (
+            f"provider_refresh_{primary.tenant.slug}"
+            if primary.role == TenantMembership.Role.PROVIDER
+            else f"client_refresh_{primary.tenant.slug}"
+        )
+
         response = Response({
-            'access': str(refresh.access_token),
+            "success":          True,
+            "access":           str(refresh.access_token),
+            "user":             _build_user_payload(user, primary),
+            "tenant":           _build_tenant_payload(primary_tenant),
+            "membership_count": membership_count,
+        })
 
-            'user': {
-                'id': str(user.id),
-                'email': user.email,
-                'display_name': user.display_name,
-                'role': user.role,
-                'tenant_id': str(user.tenant_id) if user.tenant_id else None,
-            },
+        for m in memberships:
+            slug = m.tenant.slug
+            role_prefix = "provider" if m.role == TenantMembership.Role.PROVIDER else "client"
+            set_auth_cookies(response, refresh, cookie_name=f"{role_prefix}_refresh_{slug}")
 
-            'tenant': {
-                'slug': user.tenant.slug if user.tenant else None,
-            }
-        }, status=status.HTTP_200_OK)
 
-        set_auth_cookies(response, refresh,  cookie_name=f"provider_refresh_{user.tenant.slug}" if user.tenant else "refresh_token")
-
+        set_auth_cookies(response, refresh, cookie_name="refresh_token")
+        
         return response
     
 
@@ -353,43 +368,21 @@ class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = ForgetPasswordSerializer(data=request.data)
+        serializer = ForgotPasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        email = serializer.validated_data['email']
+        result = PasswordResetService.request_reset(email=serializer.validated_data["email"])
 
-        try:
-            user = User.objects.get(
-                email=email,
-                is_active=True,
-                role='provider'
+        if result:
+            send_password_reset_email.delay(
+                user_email=result["user"].email,
+                display_name=result["user"].display_name,
+                token=str(result["reset_token"].token),
             )
-        except User.DoesNotExist:
-            return Response({
-                'success' : True,
-                'message' : "If this email is registered, a reset link has been sent."
-            })
-
-        PasswordResetToken.objects.filter(
-            user=user,
-            status=PasswordResetToken.Status.PENDING
-        ).update(status=PasswordResetToken.Status.EXPIRED)
-
-
-        reset_token = PasswordResetToken.objects.create(
-            user=user,
-            expires_at=timezone.now() + timezone.timedelta(minutes=30)
-        )
-
-        send_password_reset_email.delay(
-            user_email=user.email,
-            display_name = user.display_name,
-            token = str(reset_token.token),
-        )
 
         return Response({
-            'success' : True,
-            'message' : 'If this email is registered, a reset link has been sent.'
+            "success": True,
+            "message": "If this email is registered, a reset link has been sent.",
         })
     
 
@@ -401,63 +394,47 @@ class ResetPasswordView(APIView):
         serializer = ResetPasswordSerializer(data = request.data)
         serializer.is_valid(raise_exception=True)
 
-        token_value = serializer.validated_data['token']
-        new_password = serializer.validated_data['password']
-
         try:
-            reset_token = PasswordResetToken.objects.select_related('user').get(
-                token=token_value,
-                status=PasswordResetToken.Status.PENDING
+            PasswordResetService.confirm_reset(
+                token_value=serializer.validated_data["token"],
+                new_password=serializer.validated_data["password"],
             )
-        except PasswordResetToken.DoesNotExist:
-            return Response(
-                {'success': False, 'message': 'Invalid or expired reset link.'},
-                status=400
-            )
-
-        if reset_token.expires_at < timezone.now():
-            reset_token.status = PasswordResetToken.Status.EXPIRED
-            reset_token.save()
-            return Response(
-                {'success': False, 'message': 'Reset link has expired. Please request a new one.'},
-                status=400
-            )
-        
-        user = reset_token.user
-        user.set_password(new_password)
-        user.save()
-
-        reset_token.status = PasswordResetToken.Status.USED
-        reset_token.used_at = timezone.now()
-        reset_token.save()
-
-        return Response({
-            'success' : True,
-            'message' : "Password reset successfully."
-        })
+        except InvalidOrExpiredToken as e:
+            return Response({"success": False, "message": str(e)}, status=400)
+ 
+        return Response({"success": True, "message": "Password reset successfully."})
     
 
 
 class MeView(APIView):
+    """
+    Returns the current user + their membership in the active tenant
+    """
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
 
-        user = request.user
+        user       = request.user
+        membership = getattr(request, "tenant_membership", None)
+        tenant     = getattr(request, "tenant", None)
 
+        print(f"MeView: user={user.email}, membership={membership}, tenant={tenant}")
+        if membership is None and tenant is None:
+            membership = TenantMembership.objects.filter(
+                user=user,
+                is_active=True,
+            ).select_related("tenant").order_by(
+                "-role"
+            ).first()
+            if membership:
+                tenant = membership.tenant
+
+        print(f"MeView: resolved role={membership.role if membership else 'none'}, tenant={tenant}")
+ 
         return Response({
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "display_name": user.display_name,
-                "role": user.role,
-            },
-
-            "tenant": user.tenant and {
-                "slug": user.tenant.slug,
-                "name": user.tenant.name,
-                "logo_url": user.tenant.logo_url,
-            } or None
+            "user":   _build_user_payload(user, membership),
+            "tenant": _build_tenant_payload(tenant),
         })
         
 
@@ -466,35 +443,44 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        tenant = getattr(request, 'tenant', None)
 
-        if tenant:
-            client_cookie = f"client_refresh_{tenant.slug}"
-            provider_cookie = f"provider_refresh_{tenant.slug}"
-            
-            refresh_token = (
-                request.COOKIES.get(client_cookie) or
-                request.COOKIES.get(provider_cookie)
-            )
-        else:
-            client_cookie = None
-            provider_cookie = None
-            refresh_token = request.COOKIES.get("refresh_token")
+        # Blacklist any available refresh token
+        all_tokens = []
 
-        if refresh_token:
+        for key, value in request.COOKIES.items():
+
+            if (
+                key == "refresh_token"
+                or key.startswith("provider_refresh_")
+                or key.startswith("client_refresh_")
+            ):
+                all_tokens.append(value)
+
+        for token in all_tokens:
             try:
-                token = RefreshToken(refresh_token)
-                token.blacklist()
+                RefreshToken(token).blacklist()
             except Exception:
                 pass
 
-        response = Response({"success": True, "message": "Logged Out."})
-        
-        if tenant:
-            response.delete_cookie(f"client_refresh_{tenant.slug}", domain=".lvh.me", path="/")
-            response.delete_cookie(f"provider_refresh_{tenant.slug}", domain=".lvh.me", path="/")
-        else:
-            response.delete_cookie("refresh_token", domain=".lvh.me", path="/")
+        response = Response({
+            "success": True,
+            "message": "Logged Out."
+        })
+
+        # Delete ALL auth cookies
+        for key in request.COOKIES.keys():
+
+            if (
+                key == "refresh_token"
+                or key.startswith("provider_refresh_")
+                or key.startswith("client_refresh_")
+            ):
+
+                response.delete_cookie(
+                    key,
+                    domain=".lvh.me",
+                    path="/",
+                )
 
         return response
     
@@ -508,31 +494,28 @@ class GoogleAuthView(APIView):
  
         google_data = serializer.validated_data['access_token'] 
         email = google_data['email']
- 
-        existing = User.objects.filter(
-            email=email,
-            role=User.Role.PROVIDER,
-        ).first()
+
+        existing = UserRepository.get_by_email(email)
  
         if existing:
             if not existing.is_active:
                 return Response(
-                    {'success': False, 'message': 'This account has been deactivated.'},
+                    {"success": False, "message": "This account has been deactivated."},
                     status=status.HTTP_403_FORBIDDEN,
                 )
             user = existing
+
             if not user.is_email_verified:
                 user.is_email_verified = True
-                user.is_active = True
-            if not user.avatar_url and google_data['avatar_url']:
-                user.avatar_url = google_data['avatar_url']
+                user.is_active         = True
+            if not user.avatar_url and google_data.get("avatar_url"):
+                user.avatar_url = google_data["avatar_url"]
             user.save()
         else:
             user = User(
                 email=email,
-                role=User.Role.PROVIDER,
-                display_name=google_data['display_name'],
-                avatar_url=google_data['avatar_url'],
+                display_name=google_data["display_name"],
+                avatar_url=google_data.get("avatar_url"),
                 is_active=True,
                 is_email_verified=True,
             )
@@ -542,30 +525,67 @@ class GoogleAuthView(APIView):
         update_last_login(None, user)
         refresh = RefreshToken.for_user(user)
  
-        needs_workspace = user.tenant_id is None
+        # Check if this user has a provider workspace yet
+        provider_membership = TenantMembership.objects.filter(
+            user=user,
+            role=TenantMembership.Role.PROVIDER,
+        ).select_related("tenant").first()
+
+        membership_count = TenantMembership.objects.filter(
+            user=user,
+            is_active=True,
+        ).count()
+        
+        needs_workspace = provider_membership is None
+        tenant = provider_membership.tenant if provider_membership else None
  
         response = Response({
-            'success': True,
-            'access': str(refresh.access_token),
-            'needs_workspace': needs_workspace,
-            'user': {
-                'id': str(user.id),
-                'email': user.email,
-                'display_name': user.display_name,
-                'role': user.role,
-                'tenant_id': str(user.tenant_id) if user.tenant_id else None,
-            },
-            'tenant': {
-                'slug': user.tenant.slug if user.tenant else None,
-            },
-        }, status=status.HTTP_200_OK)
+            "success":        True,
+            "access":         str(refresh.access_token),
+            "needs_workspace": needs_workspace,
+            "user":           _build_user_payload(user, provider_membership),
+            "tenant":         _build_tenant_payload(tenant),
+            "membership_count": membership_count, 
+        })
  
-        cookie_name = (
-            f'provider_refresh_{user.tenant.slug}'
-            if user.tenant
-            else 'refresh_token'
-        )
+        cookie_name = f"provider_refresh_{tenant.slug}" if tenant else "refresh_token"
         set_auth_cookies(response, refresh, cookie_name=cookie_name)
- 
         return response
+    
+
+class MembershipsView(APIView):
+    """
+    GET /auth/memberships/
+
+    Returns all portals the logged-in user belongs to,
+    split by role. Used by grove.co/portals picker screen
+    and the portal switcher component.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        memberships = (
+            TenantMembership.objects
+            .filter(user=request.user, is_active=True)
+            .select_related("tenant", "tenant__plan")
+        )
+
+        provider_portals = []
+        client_portals   = []
+
+        for m in memberships:
+            portal = {
+                "tenant_name": m.tenant.name,
+                "tenant_slug": m.tenant.slug,
+                "tenant_logo": m.tenant.logo_url,
+            }
+            if m.role == TenantMembership.Role.PROVIDER:
+                provider_portals.append(portal)
+            else:
+                client_portals.append(portal)
+
+        return Response({
+            "provider_portals": provider_portals,
+            "client_portals":   client_portals,
+        })
  

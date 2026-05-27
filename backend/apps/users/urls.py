@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import ProviderSignupView, VerifyEmailAPIView, WorkspaceSetupAPIView, CheckSlugAPIView, LoginView, ForgotPasswordView, ResetPasswordView, RefreshTokenView, MeView, LogoutView, GoogleAuthView
+from .views import ProviderSignupView, VerifyEmailAPIView, WorkspaceSetupAPIView, CheckSlugAPIView, LoginView, ForgotPasswordView, ResetPasswordView, RefreshTokenView, MeView, LogoutView, GoogleAuthView, MembershipsView
 
 urlpatterns = [
     path("register/", ProviderSignupView.as_view(), name = "provider-signup"),
@@ -13,5 +13,6 @@ urlpatterns = [
     path("me/", MeView.as_view(), name = "me"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("google/", GoogleAuthView.as_view(), name="google-auth"),
+    path("memberships/", MembershipsView.as_view(), name="memberships"),
 
 ]

@@ -1,25 +1,20 @@
-import ProviderSidebar from './ProviderSidebar'
+import ClientSidebar from './ClientSidebar'
 
-export default function ProviderLayout({
+export default function ClientLayout({
   children,
-  topbar,
-  badges,
+  badges = {},
 }) {
   return (
     <div className="flex min-h-screen bg-[#f7f8f7]">
-      <ProviderSidebar badges={badges} />
+      <ClientSidebar badges={badges} />
 
       {/* Right column */}
       <div className="flex flex-1 flex-col min-w-0">
-        {topbar}
-
         <main
           className="
             flex-1
             overflow-y-auto
-
             pb-[88px]
-
             lg:pb-0
           "
         >

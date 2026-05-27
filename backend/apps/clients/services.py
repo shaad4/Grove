@@ -1,16 +1,22 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.users.models import User, PasswordResetToken
-from apps.tenants.models import TenantUsage
-from .repositories import ClientRepository, InviteRepository, PasswordResetRepository
-from django.utils.crypto import get_random_string
+from apps.tenants.models import Tenant, TenantMembership, TenantUsage
+from apps.users.models import User
+from apps.users.repositories import UserRepository
 
-# custom exceptions
+from .models import Client, Invite
+from .repositories import ClientRepository, InviteRepository, TagRepository
+
+
+#custom exceptions
 class ClientLimitExceeded(Exception):
     pass
 
 class DuplicateClientEmail(Exception):
+    pass
+
+class PendingInviteExists(Exception):
     pass
 
 class InvalidInviteToken(Exception):
@@ -19,202 +25,138 @@ class InvalidInviteToken(Exception):
 class ExpiredInviteToken(Exception):
     pass
 
-class InvalidResetToken(Exception):
-    pass
-
-class ExpiredResetToken(Exception):
-    pass
 
 
 class ClientService:
 
     @staticmethod
-    def _check_limit(tenant):
-        """Raise ClientLimitExceeded if the tenant is at their plan limit."""
+    @transaction.atomic
+    def invite_client( tenant ,provider, client_name, client_email,
+                      business_type=None, private_note=None, tags=None):
+        
+        usage = TenantUsage.objects.select_for_update().get(tenant=tenant)
         limit = tenant.effective_client_limit
-        current = ClientRepository.get_active_count(tenant.id)
-        if current >= limit:
+
+        if limit != -1 and usage.client_count >= limit:
             raise ClientLimitExceeded(
-                f"You have reached your plan limit of {limit} client(s). "
+                f"You have reached your plan limit of {limit} clients. "
                 "Upgrade to Pro to add more."
             )
-        
-    @staticmethod
-    @transaction.atomic
-    def invite_client(tenant, provider, client_name, client_email):
-        """
-        Full flow for adding a new client:
-        1. Check plan limit
-        2. Check for duplicate email in this tenant
-        3. Cancel any existing pending invite for this email
-        4. Create an inactive User (role=client)
-        5. Create a Client record
-        6. Create an Invite record
-        7. Increment TenantUsage.client_count
-        8. Return invite so the view can fire the Celery task
-        """
 
-        client_email = client_email.lower().strip()
+        email = client_email.lower().strip()
 
-        ClientService._check_limit(tenant)
-
-        if ClientRepository.email_exists_in_tenant(client_email, tenant.id):
+        if ClientRepository.email_exists_in_tenant(email, tenant.id):
             raise DuplicateClientEmail(
-                f"{client_email} is already a client in your workspace."
+                "A client with this email already exists in your workspace."
             )
-          
 
-        InviteRepository.expire_existing(client_email, tenant.id)
-
-        user = User.objects.create_user(
-            email = client_email,
-            password = get_random_string(length=32),
-            tenant = tenant,
-            role = User.Role.CLIENT,
-            display_name = client_name,
-            is_active=False,
-            is_email_verified = False,
-            
-        )
-
-        client = ClientRepository.create(
-            tenant=tenant,
-            user=user,
-            provider=provider,
-        )
+        if InviteRepository.has_pending_invite(email, tenant.id):
+            raise DuplicateClientEmail(
+                "An invite has already been sent to this email and is still pending."
+            )
 
         invite = InviteRepository.create(
             tenant=tenant,
             provider=provider,
-            client_email=client_email,
+            client_email=email,
             client_name=client_name,
-            expires_at=timezone.now() + timezone.timedelta(hours=48),
         )
 
-        TenantUsage.objects.filter(tenant=tenant).update(
-            client_count = TenantUsage.objects.filter(
-                tenant=tenant
-            ).values_list("client_count", flat=True)[0] + 1
+        client = ClientRepository.create_pending(
+            tenant=tenant,
+            provider=provider,
+            client_name=client_name,
+            business_type=business_type,
+            private_note=private_note,
         )
 
-        return {
-            "client" : client,
-            "invite" : invite,
-            "user" : user,
-        }
+        if tags:
+            TagRepository.set_client_tags(client, tags, tenant)
+
+
+        return {"invite": invite, "client" : client}
     
+
 
     @staticmethod
     @transaction.atomic
-    def accept_invite(token , password):
-        """
-        Client accepts their invite:
-        1. Validate token exists and is pending
-        2. Check not expired
-        3. Activate the user + set their real password
-        4. Mark invite accepted
-        """
-         
+    def accept_invite(token, password):
+
         invite = InviteRepository.get_pending_by_token(token)
 
         if invite is None:
-            raise InvalidInviteToken("This invite link is invalid.")
+            raise InvalidInviteToken(
+                "This invite link is invalid or has already been used."
+            )
 
         if invite.expires_at < timezone.now():
-            invite.status = "expired"
-            invite.save(update_fields=["status"])
             raise ExpiredInviteToken(
                 "This invite link has expired. Ask your provider to resend it."
             )
-        
-        try:
-            user = User.objects.get(
-                email=invite.client_email,
-                tenant=invite.tenant,
-                role=User.Role.CLIENT,
-                is_active=False,
-            )
-        except User.DoesNotExist:
-            raise InvalidInviteToken("No account found for this invite.")
 
+        tenant = invite.tenant
+        provider = invite.provider
+        email = invite.client_email
 
-        user.set_password(password)
-        user.is_active = True
-        user.is_email_verified = True
-        user.save()
+        # find or create the global user
+        existing_user = UserRepository.get_by_email(email)
 
-        InviteRepository.mark_accepted(invite)
+        if existing_user:
+            # user already exists globally (client of another agency)
+            user = existing_user
 
-        return {
-            "user" : user,
-            "tenant" : invite.tenant,
-        }
-        
+            #Check they dont already have a membership here
+            already_member = TenantMembership.objects.filter(
+                user=user, tenant=tenant
+            ).exists()
 
-class ClientPasswordResetService:
+            if already_member:
+                InviteRepository.mark_accepted(invite)
+                client = Client.objects.get(user=user, tenant=tenant)
+                return {"user": user, "tenant": tenant, "client": client}
+        else:
+            #brand new user, set password from invite form
+            if not password:
+                raise InvalidInviteToken(
+                    "Password is required for new accounts."
+                )
 
-
-    @staticmethod
-    def request_reset(email, tenant):
-        """
-        Look up an active client by email scoped to this tenant.
-        Expire any pending tokens, create a new one, return it.
-        Returns None if user not found — caller sends same response
-        either way (no email enumeration).
-        """
-
-        try:
-            user = User.objects.get(
+            user = UserRepository.create_client_user(
                 email=email,
-                tenant=tenant,
-                role=User.Role.CLIENT,
-                is_active=True,
+                password=password,
+                display_name=invite.client_name,
             )
-        except User.DoesNotExist:
-            return None
-        
-        if user.client_profile.is_deactivated:
-            return None
-        
 
-        PasswordResetRepository.expire_pending(user)
-
-        reset_token = PasswordResetRepository.create(
+        #Create membership (role=client in this tenant)
+        membership = TenantMembership.objects.create(
             user=user,
-            expires_at=timezone.now() + timezone.timedelta(minutes=30),
+            tenant=tenant,
+            role=TenantMembership.Role.CLIENT,
         )
 
-        return {
-            "user" : user,
-            "reset_token" : reset_token,
-        }
-    
+        client = ClientRepository.get_pending_by_invite(invite)
 
-    @staticmethod
-    def confirm_reset(token, new_password):
-        """
-        Validate token, reset password, mark token used.
-        Raises InvalidResetToken or ExpiredResetToken on failure.
-        """
+        if client:
+            ClientRepository.activate(client, user, membership)
+        else:
+            # Fallback — shouldn't happen but safe to handle
+            client = Client.objects.create(
+                tenant=tenant,
+                user=user,
+                membership=membership,
+                provider=provider,
+                status=Client.Status.ACTIVE,
+                joined_at=timezone.now(),
+            )
 
-        reset_token = PasswordResetRepository.get_pending_by_token(token)
+        #Update usage counter
+        TenantUsage.objects.filter(tenant=tenant).update(
+            client_count=TenantUsage.objects.values_list(
+                "client_count", flat=True
+            ).get(tenant=tenant) + 1
+        )
 
-        if reset_token is None:
-            raise InvalidResetToken("Invalid or already used reset link.")
-        
-        if reset_token.expires_at < timezone.now():
-            reset_token.status = PasswordResetToken.Status.EXPIRED
-            reset_token.save(update_fields=["status"])
-            raise ExpiredResetToken("Reset link has expired. Please request a new one.")
+        #Mark invite as accepted
+        InviteRepository.mark_accepted(invite)
 
-
-        user = reset_token.user
-        user.set_password(new_password)
-        user.save(update_fields=["password", "updated_at"])
-
-
-        reset_token.status = PasswordResetToken.Status.USED
-        reset_token.used_at = timezone.now()
-        reset_token.save(update_fields=["status", "used_at"])
-
-
+        return {"user": user, "tenant": tenant, "client": client, "membership": membership}

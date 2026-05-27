@@ -1,35 +1,50 @@
 import { useState, useEffect } from 'react'
-import { useDispatch } from 'react-redux'
-import { clearAuth } from '../../features/auth/authSlice'
 import { useSearchParams } from 'react-router-dom'
+import { useDispatch } from 'react-redux'
 import {
   ArrowRight, Check, Eye, EyeOff,
   Lock, MessageCircle, TrendingUp, Upload, AlertTriangle,
 } from 'lucide-react'
-import GroveLogo from '../../components/layout/GroveLogo'
+import groveLogo from '../../assets/Grove_transparent_logo(White).png'
 import { authApi as clientApi } from '../../api/auth.api'
 import { useAuth } from '../../context/AuthContext'
-import { getSubdomain } from '../../utils/domain'
 
-// ─── PASSWORD STRENGTH ────────────────────────────────────────
+// ─── HELPERS ──────────────────────────────────────────────────
+
 function getStrength(pw) {
   if (!pw) return { score: 0, label: '', color: '' }
   let s = 0
-  if (pw.length >= 8)              s++
-  if (/[A-Z]/.test(pw))           s++
-  if (/[0-9]/.test(pw))           s++
-  if (/[^A-Za-z0-9]/.test(pw))   s++
+  if (pw.length >= 8)            s++
+  if (/[A-Z]/.test(pw))         s++
+  if (/[0-9]/.test(pw))         s++
+  if (/[^A-Za-z0-9]/.test(pw)) s++
   const levels = [
-    { label: '',      color: '' },
-    { label: 'Weak',  color: 'bg-red-400' },
-    { label: 'Fair',  color: 'bg-yellow-400' },
-    { label: 'Good',  color: 'bg-[#1d9e75]' },
-    { label: 'Strong',color: 'bg-[#0f6e56]' },
+    { label: '',       color: '' },
+    { label: 'Weak',   color: 'bg-red-400' },
+    { label: 'Fair',   color: 'bg-yellow-400' },
+    { label: 'Good',   color: 'bg-[#1d9e75]' },
+    { label: 'Strong', color: 'bg-[#0f6e56]' },
   ]
   return { score: s, ...levels[s] }
 }
 
-// ─── FEATURE ROW ──────────────────────────────────────────────
+/**
+ * Build the portal URL for a given tenant slug.
+ * Reads VITE_APP_DOMAIN + VITE_PORT so it works across
+ * local (lvh.me:5173), staging, and production without
+ * any hardcoded strings.
+ */
+function portalUrl(slug) {
+  const domain = import.meta.env.VITE_APP_DOMAIN || 'lvh.me'
+  const port   = import.meta.env.VITE_PORT       || '5173'
+  const base   = import.meta.env.PROD
+    ? `https://${slug}.${domain}`
+    : `http://${slug}.${domain}:${port}`
+  return `${base}/portal`
+}
+
+// ─── SUB-COMPONENTS ───────────────────────────────────────────
+
 function Feature({ icon, title, desc }) {
   return (
     <div className="flex items-start gap-4">
@@ -49,30 +64,32 @@ function Divider() {
 }
 
 // ─── PAGE ─────────────────────────────────────────────────────
+
 export default function AcceptInvitePage() {
-  const [searchParams]        = useSearchParams()
-  const token                 = searchParams.get('token')
-  const { saveSession }       = useAuth()
+  const [searchParams]  = useSearchParams()
+  const token           = searchParams.get('token')
+  const { saveSession } = useAuth()
 
-  // Token validation state
-  const [validating, setValidating]     = useState(true)
-  const [tokenError, setTokenError]     = useState('')
-  const [inviteData, setInviteData]     = useState(null)   // {client_name, client_email, provider_name, workspace_name, tenant_slug}
+  // Token validation
+  const [validating,  setValidating]  = useState(true)
+  const [tokenError,  setTokenError]  = useState('')
+  const [inviteData,  setInviteData]  = useState(null)
+  // inviteData shape:
+  //   { client_name, client_email, provider_name, workspace_name,
+  //     tenant_slug, already_has_account }
 
-  // Form state
-  const [password, setPassword]         = useState('')
-  const [confirm, setConfirm]           = useState('')
-  const [showPw, setShowPw]             = useState(false)
-  const [submitting, setSubmitting]     = useState(false)
-  const [submitError, setSubmitError]   = useState('')
-  const [done, setDone]                 = useState(false)
+  // Form
+  const [password,     setPassword]     = useState('')
+  const [confirm,      setConfirm]      = useState('')
+  const [showPw,       setShowPw]       = useState(false)
+  const [submitting,   setSubmitting]   = useState(false)
+  const [submitError,  setSubmitError]  = useState('')
+  const [done,         setDone]         = useState(false)
 
-  const dispatch = useDispatch()  // is this line present?
-  
   const strength = getStrength(password)
   const pwMatch  = confirm && password === confirm
 
-  // ── Validate token on mount ────────────────────────────────
+  // ── Validate token on mount ──────────────────────────────
   useEffect(() => {
     if (!token) {
       setTokenError('No invite token found. Check your email link.')
@@ -81,47 +98,58 @@ export default function AcceptInvitePage() {
     }
 
     clientApi.validateInviteToken(token)
-      .then(res => {
-        setInviteData(res.data.data)
-      })
-      .catch(err => {
-        setTokenError(
-          err?.response?.data?.message ||
-          'This invite link is invalid or has expired.'
-        )
-      })
+      .then(res => setInviteData(res.data.data))
+      .catch(err => setTokenError(
+        err?.response?.data?.message ||
+        'This invite link is invalid or has expired.'
+      ))
       .finally(() => setValidating(false))
   }, [token])
 
-  // ── Submit ─────────────────────────────────────────────────
+  // ── Submit ───────────────────────────────────────────────
   const handleSubmit = async () => {
     setSubmitError('')
 
-    if (password.length < 8) {
-      setSubmitError('Password must be at least 8 characters.')
-      return
-    }
-    if (password !== confirm) {
-      setSubmitError('Passwords do not match.')
-      return
+    // Only validate password fields for new accounts
+    if (!inviteData?.already_has_account) {
+      if (password.length < 8) {
+        setSubmitError('Password must be at least 8 characters.')
+        return
+      }
+      if (password !== confirm) {
+        setSubmitError('Passwords do not match.')
+        return
+      }
     }
 
     setSubmitting(true)
     try {
-      const res = await clientApi.acceptInvite({ token, password })
-      console.log('accept response:', res.data)
-      const { tenant } = res.data.data
+      const payload = inviteData?.already_has_account
+        ? { token }           // existing user — no password needed
+        : { token, password } // new user — set password
 
-      dispatch(clearAuth())
+
+      console.log('→ sending payload:', payload)
+      const res = await clientApi.acceptInvite(payload)
+      console.log('→ accept response:', res.data)
+
+      const { access, user, tenant } = res.data.data
+      console.log('→ user:', user)
+      console.log('→ tenant:', tenant)
+
+     
+      saveSession({ accessToken: access, user, tenant })
+      console.log('→ saveSession called')
 
       setDone(true)
 
-      // Redirect to client login on provider subdomain
+      // Give the success screen a moment to render, then navigate.
       setTimeout(() => {
-        window.location.replace(
-          `http://${tenant.slug}.lvh.me:5173/client-login`
-        )
+        const url = portalUrl(tenant.slug)
+        console.log('→ redirecting to:', url)
+        window.location.replace(url)
       }, 1500)
+
     } catch (err) {
       setSubmitError(
         err?.response?.data?.message ||
@@ -132,12 +160,13 @@ export default function AcceptInvitePage() {
     }
   }
 
-  // Provider initials for left panel
   const providerInitials = inviteData?.provider_name
     ? inviteData.provider_name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
     : '??'
 
-  // ── LOADING ────────────────────────────────────────────────
+  const isExistingUser = inviteData?.already_has_account
+
+  // ── LOADING ──────────────────────────────────────────────
   if (validating) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f8f6]">
       <div className="flex flex-col items-center gap-4">
@@ -150,7 +179,7 @@ export default function AcceptInvitePage() {
     </div>
   )
 
-  // ── TOKEN ERROR ────────────────────────────────────────────
+  // ── TOKEN ERROR ──────────────────────────────────────────
   if (tokenError) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f8f6] px-4">
       <div className="w-full max-w-[420px] rounded-[24px] border border-[#e8eae8] bg-white p-10 text-center shadow-sm">
@@ -166,7 +195,7 @@ export default function AcceptInvitePage() {
     </div>
   )
 
-  // ── SUCCESS ────────────────────────────────────────────────
+  // ── SUCCESS ──────────────────────────────────────────────
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f8f6] px-4">
       <div className="w-full max-w-[420px] rounded-[24px] border border-[#b3e0d1] bg-white p-10 text-center shadow-sm">
@@ -181,41 +210,229 @@ export default function AcceptInvitePage() {
     </div>
   )
 
-  // ── MAIN FORM ──────────────────────────────────────────────
+  // ── MAIN FORM ────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-white flex flex-col lg:flex-row">
+
+      
       {/* LEFT PANEL */}
-      <div className="relative hidden lg:flex w-[42%] overflow-hidden bg-[#041c16]">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(15,110,86,0.9)_0%,rgba(10,46,36,1)_55%,rgba(4,28,22,1)_100%)]" />
-        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-10 py-10">
-          {/* Logo */}
-          <GroveLogo size="md" variant="full" dark />
+      <div className="relative hidden lg:flex w-[44%] overflow-hidden bg-[#031712]">
+
+        {/* Background layers */}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(29,158,117,0.28)_0%,rgba(15,110,86,0.16)_28%,rgba(3,23,18,1)_72%)]" />
+
+        <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.015),transparent)]" />
+
+        {/* Glow */}
+        <div className="absolute left-[-120px] top-[120px] h-[320px] w-[320px] rounded-full bg-[#1d9e75]/20 blur-[120px]" />
+
+        <div className="absolute bottom-[-100px] right-[-80px] h-[260px] w-[260px] rounded-full bg-[#0f6e56]/20 blur-[100px]" />
+
+        {/* Content */}
+        <div className="relative z-10 flex min-h-screen w-full flex-col justify-between px-12 py-10">
+
+          {/* Top */}
+          <div className="flex w-full items-center justify-start">
+            <img
+              src={groveLogo}
+              alt="Grove"
+              className="h-8 w-auto object-contain opacity-95"
+            />
+          </div>
 
           {/* Center */}
-          <div className="mx-auto flex w-full max-w-[420px] flex-col items-center">
-            <div className="flex h-[74px] w-[74px] items-center justify-center rounded-full bg-[#1d9e75] text-[28px] font-semibold tracking-wide text-white">
-              {providerInitials}
-            </div>
-            <h2 className="mt-5 text-center text-[32px] font-semibold text-white">
-              {inviteData?.workspace_name}
-            </h2>
-            <p className="mt-3 text-center text-[16px] text-[#b3e0d1]">
-              has invited you to their Grove workspace
-            </p>
+          <div className="mx-auto flex w-full max-w-[460px] flex-col items-center">
 
-            <div className="mt-12 w-full rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-xl">
-              <Feature icon={<Upload size={14} />} title="Submit requests" desc="One place for all your work" />
-              <Divider />
-              <Feature icon={<TrendingUp size={14} />} title="Track progress" desc="Live status updates on every request" />
-              <Divider />
-              <Feature icon={<MessageCircle size={14} />} title="Message directly" desc={`Chat with ${inviteData?.provider_name} without switching apps`} />
+            {/* Provider identity */}
+            <div className="relative">
+
+              {/* Glow ring */}
+              <div className="absolute inset-0 rounded-full bg-[#1d9e75]/30 blur-2xl" />
+
+              {/* Avatar */}
+              <div className="
+                relative
+
+                flex h-[88px] w-[88px]
+                items-center justify-center
+
+                rounded-[28px]
+
+                border border-white/10
+
+                bg-[linear-gradient(135deg,#1d9e75,#0f6e56)]
+
+                text-[32px]
+                font-semibold
+                tracking-wide
+                text-white
+
+                shadow-[0_10px_40px_rgba(0,0,0,0.25)]
+              ">
+                {providerInitials}
+              </div>
+            </div>
+
+            {/* Heading */}
+            <div className="mt-8 text-center">
+              <p className="
+                text-[12px]
+                font-medium
+                uppercase
+                tracking-[0.18em]
+                text-[#7fd8ba]
+              ">
+                You've been invited
+              </p>
+
+              <h2 className="
+                mt-4
+
+                text-[42px]
+                font-semibold
+
+                tracking-[-1.6px]
+
+                leading-[1.05]
+
+                text-white
+              ">
+                {inviteData?.workspace_name}
+              </h2>
+
+              <p className="
+                mt-5
+
+                text-[17px]
+                leading-8
+
+                text-[#9fd6c3]
+              ">
+                Collaborate, submit requests, track progress,
+                and communicate with your provider —
+                all in one focused workspace.
+              </p>
+            </div>
+
+            {/* Features */}
+            <div className="
+              mt-14
+
+              w-full
+
+              rounded-[28px]
+
+              border border-white/10
+
+              bg-white/[0.045]
+
+              p-7
+
+              shadow-[0_12px_40px_rgba(0,0,0,0.18)]
+
+              backdrop-blur-xl
+            ">
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <Upload size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Submit requests
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Organize all project requests in one secure place.
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-6 h-px w-full bg-white/10" />
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <TrendingUp size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Track progress
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Follow updates, delivery stages, and approvals in real time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-6 h-px w-full bg-white/10" />
+
+              {/* Feature */}
+              <div className="flex items-start gap-4">
+                <div className="
+                  flex h-11 w-11 shrink-0 items-center justify-center
+
+                  rounded-2xl
+
+                  border border-white/10
+
+                  bg-[#1d9e75]/20
+
+                  text-[#baf3dd]
+                ">
+                  <MessageCircle size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-[15px] font-medium text-white">
+                    Communicate clearly
+                  </h3>
+
+                  <p className="mt-1.5 text-[13px] leading-6 text-[#9fd6c3]">
+                    Stay aligned with {inviteData?.provider_name} without scattered emails.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-center gap-2 text-[12px] text-[#6ba898]">
-            <Lock size={11} />
-            <span>Your portal is private and secured</span>
+          {/* Bottom */}
+          <div className="
+            flex items-center gap-2
+
+            text-[12px]
+
+            text-[#76bca6]
+          ">
+            <Lock size={12} />
+
+            <span>
+              Private workspace · Secure access · Powered by Grove
+            </span>
           </div>
         </div>
       </div>
@@ -223,17 +440,24 @@ export default function AcceptInvitePage() {
       {/* RIGHT PANEL */}
       <div className="flex flex-1 items-center justify-center bg-[#f8f8f6] px-6 py-12 lg:px-10">
         <div className="w-full max-w-[450px]">
+
+          {/* Heading — differs by account type */}
           <div>
             <h1 className="text-[36px] font-bold tracking-[-1px] text-[#141a14]">
-              You're invited, {inviteData?.client_name?.split(' ')[0]}!
+              {isExistingUser
+                ? `Welcome back, ${inviteData?.client_name?.split(' ')[0]}!`
+                : `You're invited, ${inviteData?.client_name?.split(' ')[0]}!`}
             </h1>
             <p className="mt-2 text-[16px] leading-7 text-[#6b7a6b]">
-              Set a password to access your private project portal.
+              {isExistingUser
+                ? 'Your existing Grove account will be connected to this portal.'
+                : 'Set a password to access your private project portal.'}
             </p>
           </div>
 
           <div className="mt-10 space-y-6">
-            {/* Email (read-only) */}
+
+            {/* Email (always read-only) */}
             <div>
               <label className="mb-2 block text-[13px] font-medium text-[#141a14]">Email address</label>
               <div className="relative">
@@ -245,81 +469,97 @@ export default function AcceptInvitePage() {
                 />
                 <Lock size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#a3aaa3]" />
               </div>
-              <p className="mt-2 text-[12px] text-[#9ea89e]">This cannot be changed.</p>
+              <p className="mt-2 text-[12px] text-[#9ea89e]">
+                {isExistingUser
+                  ? 'This is your existing Grove account.'
+                  : 'This cannot be changed.'}
+              </p>
             </div>
 
-            {/* Password */}
-            <div>
-              <label className="mb-2 block text-[13px] font-medium text-[#141a14]">Create a password</label>
-              <div className="relative">
-                <input
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Choose a secure password"
-                  className="h-[54px] w-full rounded-[12px] border border-[#e8eae8] bg-white px-4 pr-12 text-[14px] outline-none transition-all focus:border-[#0f6e56] focus:ring-4 focus:ring-[#0f6e56]/10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPw(s => !s)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9ea89e]"
-                >
-                  {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </div>
+            {/* Password fields — only for new users */}
+            {!isExistingUser && (
+              <>
+                <div>
+                  <label className="mb-2 block text-[13px] font-medium text-[#141a14]">Create a password</label>
+                  <div className="relative">
+                    <input
+                      type={showPw ? 'text' : 'password'}
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder="Choose a secure password"
+                      className="h-[54px] w-full rounded-[12px] border border-[#e8eae8] bg-white px-4 pr-12 text-[14px] outline-none transition-all focus:border-[#0f6e56] focus:ring-4 focus:ring-[#0f6e56]/10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(s => !s)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[#9ea89e]"
+                    >
+                      {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
 
-              {/* Strength bar */}
-              {password && (
-                <div className="mt-3">
-                  <div className="flex items-center gap-1.5">
-                    {[1, 2, 3, 4].map(i => (
-                      <div
-                        key={i}
-                        className={`h-[4px] flex-1 rounded-full transition-all ${
-                          i <= strength.score ? strength.color : 'bg-[#dfe3df]'
-                        }`}
-                      />
-                    ))}
-                    {strength.label && (
-                      <span className={`ml-2 text-[11px] font-semibold ${
-                        strength.score >= 3 ? 'text-[#0f6e56]' : 'text-[#92500a]'
-                      }`}>
-                        {strength.label}
+                  {password && (
+                    <div className="mt-3">
+                      <div className="flex items-center gap-1.5">
+                        {[1, 2, 3, 4].map(i => (
+                          <div
+                            key={i}
+                            className={`h-[4px] flex-1 rounded-full transition-all ${
+                              i <= strength.score ? strength.color : 'bg-[#dfe3df]'
+                            }`}
+                          />
+                        ))}
+                        {strength.label && (
+                          <span className={`ml-2 text-[11px] font-semibold ${
+                            strength.score >= 3 ? 'text-[#0f6e56]' : 'text-[#92500a]'
+                          }`}>
+                            {strength.label}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <p className="mt-2 text-[12px] text-[#9ea89e]">Minimum 8 characters.</p>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-[13px] font-medium text-[#141a14]">Confirm password</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={confirm}
+                      onChange={e => setConfirm(e.target.value)}
+                      placeholder="Repeat your password"
+                      className={`h-[54px] w-full rounded-[12px] border bg-white px-4 pr-12 text-[14px] outline-none transition-all ${
+                        confirm
+                          ? pwMatch
+                            ? 'border-[#1d9e75] ring-4 ring-[#1d9e75]/10'
+                            : 'border-red-400 ring-4 ring-red-100'
+                          : 'border-[#e8eae8] focus:border-[#0f6e56] focus:ring-4 focus:ring-[#0f6e56]/10'
+                      }`}
+                    />
+                    {confirm && (
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2">
+                        {pwMatch
+                          ? <Check size={16} className="text-[#1d9e75]" />
+                          : <span className="text-[11px] text-red-400 font-medium">✗</span>}
                       </span>
                     )}
                   </div>
                 </div>
-              )}
-              <p className="mt-2 text-[12px] text-[#9ea89e]">Minimum 8 characters.</p>
-            </div>
+              </>
+            )}
 
-            {/* Confirm */}
-            <div>
-              <label className="mb-2 block text-[13px] font-medium text-[#141a14]">Confirm password</label>
-              <div className="relative">
-                <input
-                  type="password"
-                  value={confirm}
-                  onChange={e => setConfirm(e.target.value)}
-                  placeholder="Repeat your password"
-                  className={`h-[54px] w-full rounded-[12px] border bg-white px-4 pr-12 text-[14px] outline-none transition-all ${
-                    confirm
-                      ? pwMatch
-                        ? 'border-[#1d9e75] ring-4 ring-[#1d9e75]/10'
-                        : 'border-red-400 ring-4 ring-red-100'
-                      : 'border-[#e8eae8] focus:border-[#0f6e56] focus:ring-4 focus:ring-[#0f6e56]/10'
-                  }`}
-                />
-                {confirm && (
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2">
-                    {pwMatch
-                      ? <Check size={16} className="text-[#1d9e75]" />
-                      : <span className="text-[11px] text-red-400 font-medium">✗</span>
-                    }
-                  </span>
-                )}
+            {/* Existing user — info card instead of password fields */}
+            {isExistingUser && (
+              <div className="rounded-[12px] border border-[#b3e0d1] bg-[#e6f5f0] px-5 py-4">
+                <p className="text-[13px] leading-6 text-[#0f6e56]">
+                  You already have a Grove account. Clicking below will add{' '}
+                  <span className="font-semibold">{inviteData?.workspace_name}</span> to
+                  your portals — no new password needed.
+                </p>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Error */}
@@ -332,7 +572,11 @@ export default function AcceptInvitePage() {
           {/* CTA */}
           <button
             onClick={handleSubmit}
-            disabled={submitting || !password || !confirm}
+            disabled={
+              submitting ||
+              // New users must fill both fields; existing users can proceed immediately
+              (!isExistingUser && (!password || !confirm))
+            }
             className="mt-8 flex h-[56px] w-full items-center justify-center gap-3 rounded-[12px] bg-[#0f6e56] text-[15px] font-semibold text-white transition-all hover:bg-[#0c5b47] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {submitting ? (
@@ -343,14 +587,14 @@ export default function AcceptInvitePage() {
             ) : (
               <>
                 <ArrowRight size={16} />
-                Accept invite & enter portal
+                {isExistingUser ? 'Accept invite & enter portal' : 'Create account & enter portal'}
               </>
             )}
           </button>
 
           {/* Footer */}
           <div className="mt-7 flex items-center justify-center gap-2">
-            <GroveLogo size="sm" variant="icon" />
+            
             <span className="text-[12px] text-[#9ea89e]">Powered by Grove</span>
           </div>
           <p className="mt-4 text-center text-[12px] text-[#9ea89e]">
