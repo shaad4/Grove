@@ -6,7 +6,7 @@ from apps.users.models import User
 from apps.users.repositories import UserRepository
 
 from .models import Client, Invite
-from .repositories import ClientRepository, InviteRepository
+from .repositories import ClientRepository, InviteRepository, TagRepository
 
 
 #custom exceptions
@@ -14,6 +14,9 @@ class ClientLimitExceeded(Exception):
     pass
 
 class DuplicateClientEmail(Exception):
+    pass
+
+class PendingInviteExists(Exception):
     pass
 
 class InvalidInviteToken(Exception):
@@ -28,7 +31,8 @@ class ClientService:
 
     @staticmethod
     @transaction.atomic
-    def invite_client( tenant ,provider, client_name, client_email):
+    def invite_client( tenant ,provider, client_name, client_email,
+                      business_type=None, private_note=None, tags=None):
         
         usage = TenantUsage.objects.select_for_update().get(tenant=tenant)
         limit = tenant.effective_client_limit
@@ -48,7 +52,7 @@ class ClientService:
 
         if InviteRepository.has_pending_invite(email, tenant.id):
             raise DuplicateClientEmail(
-                "An invite has already been sent to this email."
+                "An invite has already been sent to this email and is still pending."
             )
 
         invite = InviteRepository.create(
@@ -58,7 +62,21 @@ class ClientService:
             client_name=client_name,
         )
 
-        return {"invite": invite}
+        client = ClientRepository.create_pending(
+            tenant=tenant,
+            provider=provider,
+            client_name=client_name,
+            business_type=business_type,
+            private_note=private_note,
+        )
+
+        if tags:
+            TagRepository.set_client_tags(client, tags, tenant)
+
+
+        return {"invite": invite, "client" : client}
+    
+
 
     @staticmethod
     @transaction.atomic
@@ -116,13 +134,20 @@ class ClientService:
             role=TenantMembership.Role.CLIENT,
         )
 
-        #Create client profile
-        client = ClientRepository.create(
-            tenant=tenant,
-            user=user,
-            membership=membership,
-            provider=provider,
-        )
+        client = ClientRepository.get_pending_by_invite(invite)
+
+        if client:
+            ClientRepository.activate(client, user, membership)
+        else:
+            # Fallback — shouldn't happen but safe to handle
+            client = Client.objects.create(
+                tenant=tenant,
+                user=user,
+                membership=membership,
+                provider=provider,
+                status=Client.Status.ACTIVE,
+                joined_at=timezone.now(),
+            )
 
         #Update usage counter
         TenantUsage.objects.filter(tenant=tenant).update(

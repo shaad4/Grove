@@ -28,6 +28,7 @@ from .services import (
     DuplicateClientEmail,
     InvalidInviteToken,
     ExpiredInviteToken,
+    PendingInviteExists,
 )
 from .tasks import send_client_invite_email
 
@@ -72,11 +73,28 @@ class ClientListCreateView(APIView):
                 provider=request.user,
                 client_name=serializer.validated_data["client_name"],
                 client_email=serializer.validated_data["client_email"],
+                business_type=serializer.validated_data.get("business_type") or None,
+                private_note=serializer.validated_data.get("private_note") or None,
+                tags=serializer.validated_data.get("tags") or [],
             )
         except ClientLimitExceeded as e:
-            return Response({"success": False, "message": str(e)}, status=403)
+            return Response({
+                "success": False,
+                "error_type": "limit_reached",
+                "message": str(e),
+            }, status=403)
         except DuplicateClientEmail as e:
-            return Response({"success": False, "message": str(e)}, status=409)
+            return Response({
+                "success": False,
+                "error_type": "duplicate_client",
+                "message": str(e),
+            }, status=409)
+        except PendingInviteExists as e:
+            return Response({
+                "success": False,
+                "error_type": "pending_invite",
+                "message": str(e),
+            }, status=409)
 
         invite = result["invite"]
 

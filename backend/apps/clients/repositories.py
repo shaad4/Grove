@@ -1,6 +1,31 @@
 from django.utils import timezone
-from .models import Client, Invite
+from .models import Client, Invite, Tag, ClientTagMap
 from apps.tenants.models import Tenant
+
+
+class TagRepository:
+
+    @staticmethod
+    def get_or_create(tenant, name, color=None):
+        tag,_ = Tag.objects.get_or_create(
+            tenant=tenant,
+            name=name.strip(),
+            defaults={"color" : color},
+        )
+        return tag
+    
+    @staticmethod
+    def get_all_for_tenant(tenant_id):
+        return Tag.objects.filter(tenant_id=tenant_id).order_by("name")
+    
+    @staticmethod
+    def set_client_tags(client, tag_name, tenant):
+        """Replace all tags on a client with the given list of tag names."""
+        ClientTagMap.objects.filter(client=client).delete()
+        for name in tag_name:
+            tag = TagRepository.get_or_create(tenant=tenant, name=name.strip())
+            ClientTagMap.objects.get_or_create(client=client, tag=tag)
+
 
 
 class ClientRepository:
@@ -11,8 +36,9 @@ class ClientRepository:
         return (
             Client.objects
             .filter(tenant_id=tenant_id, is_deleted=False)
+            .prefetch_related("tag_maps__tag")
             .select_related("user", "membership")
-            .order_by("-joined_at")
+            .order_by("-created_at")
         )
 
     @staticmethod
@@ -34,16 +60,42 @@ class ClientRepository:
             tenant_id=tenant_id,
             user__email=email.lower().strip(),
             is_deleted=False,
+            status=Client.Status.ACTIVE,
         ).exists()
+    
 
     @staticmethod
-    def create(tenant, user, membership, provider):
+    def create_pending(tenant, provider, client_name, business_type=None, private_note=None):
+        """Create a pending Client record before invite is accepted."""
         return Client.objects.create(
             tenant=tenant,
-            user=user,
-            membership=membership,
             provider=provider,
+            user=None,
+            membership=None,
+            status=Client.Status.PENDING,
+            business_type=business_type,
+            private_note=private_note,
         )
+    
+    @staticmethod
+    def activate(client, user, membership):
+        """Called on invite acceptance — fills in user, membership, flips status"""
+        client.user = user
+        client.membership = membership
+        client.status = Client.Status.ACTIVE
+        client.joined_at = timezone.now()
+        client.save(update_fields=["user", "membership", "status", "joined_at", "updated_at"])
+        return client
+    
+    @staticmethod
+    def get_pending_by_invite(invite):
+        """Find the pending Client row that was created when this invite was sent."""
+        return Client.objects.filter(
+            tenant=invite.tenant,
+            provider=invite.provider,
+            status=Client.Status.PENDING,
+            user__isnull=True,
+        ).first()
 
 
 class InviteRepository:
