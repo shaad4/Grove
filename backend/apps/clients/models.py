@@ -57,6 +57,9 @@ class Client(models.Model):
         related_name="managed_clients",
     )
 
+    client_name = models.CharField(max_length=255, blank=True, default="")
+    client_email = models.EmailField(blank=True, default="")
+
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
     business_type = models.CharField(max_length=100, null=True, blank=True)
     private_note = models.TextField(null=True, blank=True)

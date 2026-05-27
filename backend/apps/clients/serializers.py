@@ -45,16 +45,15 @@ class ClientListSerializer(serializers.ModelSerializer):
         fields = [
             "id", "email", "display_name", "status",
             "is_deactivated", "last_login", "joined_at",
-            "created_at", "business_type", "private_note", "tags",
+            "created_at", "business_type", "private_note",
+            "tags", "client_name", "client_email",
         ]
 
     def get_email(self, obj):
-        return obj.user.email if obj.user else None
+        return obj.user.email if obj.user else obj.client_email
     
     def get_display_name(self, obj):
-        # Use user display name if active, else invite name isn't on client —
-        # so fall back to provider-entered name via invite (not stored on client yet)
-        return obj.user.display_name if obj.user else "Pending"
+        return obj.user.display_name if obj.user else obj.client_name
     
     def get_last_login(self, obj):
         return obj.user.last_login if obj.user else None
@@ -81,3 +80,19 @@ class ClientResetPasswordSerializer(serializers.Serializer):
     def validate_password(self, value):
         validate_password(value)
         return value
+    
+
+class UpdateClientSerializer(serializers.Serializer):
+    business_type = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    private_note = serializers.CharField(required=False, allow_blank=True)
+    tags = serializers.ListField(
+        child=serializers.CharField(max_length=50),
+        required=False,
+        allow_empty=True,
+    )
+
+class ClientDetailSerializer(ClientListSerializer):
+    class Meta(ClientListSerializer.Meta):
+        fields = ClientListSerializer.Meta.fields
+
+        
