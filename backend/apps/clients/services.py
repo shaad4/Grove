@@ -1,8 +1,7 @@
 from django.db import transaction
 from django.utils import timezone
 
-from apps.tenants.models import Tenant, TenantMembership, TenantUsage
-from apps.users.models import User
+from apps.tenants.models import  TenantMembership, TenantUsage
 from apps.users.repositories import UserRepository
 
 from .models import Client, Invite

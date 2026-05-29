@@ -23,7 +23,9 @@ import ClientLoginPage  from './pages/client/ClientLoginPage'
 import ClientDashboard  from './pages/client/ClientDashboard'
 
 // Provider pages
-import ProviderDashboard from './pages/provider/ProviderDashboard'
+import ProviderDashboard  from './pages/provider/ProviderDashboard'
+import ClientsPage        from './pages/provider/ClientsPage'
+import ClientDetailPage   from './pages/provider/ClientDetailPage'
 
 function RoleDashboard() {
   const { user, loading } = useAuth()
@@ -41,20 +43,20 @@ export default function App() {
           <TenantGuard>
             <Routes>
 
-              {/* Public  */}
+              {/* Public */}
               <Route path="/" element={<LandingPage />} />
 
-              {/* Pre-auth pages no session needed */}
+              {/* Pre-auth — no session needed */}
               <Route path="/accept-invite" element={<AcceptInvitePage />} />
               <Route path="/client-login"  element={<ClientLoginPage />} />
 
-              {/* Guest only (redirect away if already logged in) */}
+              {/* Guest only */}
               <Route element={<GuestRoute />}>
-                <Route path="/signup" element={<SignupPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/signup"          element={<SignupPage />} />
+                <Route path="/login"           element={<LoginPage />} />
+                <Route path="/verify-email"    element={<VerifyEmailPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/reset-password"  element={<ResetPasswordPage />} />
               </Route>
 
               {/* Portal picker (root domain, authenticated) */}
@@ -67,21 +69,34 @@ export default function App() {
                 <Route path="/setup-workspace" element={<WorkspaceSetupPage />} />
               </Route>
 
-              {/* Protected tenant routes (subdomain required)*/}
+              {/* Protected tenant routes */}
               <Route element={<ProtectedRoute />}>
-                {/* Provider dashboard */}
+
+                {/* Dashboard */}
                 <Route
                   path="/dashboard"
                   element={<TenantRoute><RoleDashboard /></TenantRoute>}
                 />
-                {/* Client portal separate path from /dashboard */}
+
+                {/* Client portal */}
                 <Route
                   path="/portal"
                   element={<TenantRoute><RoleDashboard /></TenantRoute>}
                 />
+
+                {/* ── Client management ── */}
+                <Route
+                  path="/clients"
+                  element={<TenantRoute><ClientsPage /></TenantRoute>}
+                />
+                <Route
+                  path="/clients/:clientId"
+                  element={<TenantRoute><ClientDetailPage /></TenantRoute>}
+                />
+
               </Route>
 
-              {/*  Misc  */}
+              {/* Misc */}
               <Route path="/workspace-not-found" element={<WorkspaceNotFoundPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
 
