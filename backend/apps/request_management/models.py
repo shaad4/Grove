@@ -56,3 +56,47 @@ class Request(models.Model):
     def __str__(self):
         return f"[{self.status}] {self.title[:60]}"
 
+
+
+class RequestActivity(models.Model):
+
+    class ActorSource(models.TextChoices):
+        USER = "user", "User"
+        SYSTEM = "system","System"
+        AI = "ai", "AI"
+
+    class EventType(models.TextChoices):
+        REQUEST_CREATED = "request_created",  "Request Created"
+        STATUS_CHANGE = "status_change",  "Status Change"
+        MESSAGE_SENT = "message_sent", "Message Sent"
+        FILE_UPLOADED = "file_uploaded", "File Uploaded"
+        NOTE_ADDED = "note_added", "Note Added"
+        DELIVERY_CREATED = "delivery_created", "Delivery Created"
+        AI_SUMMARY_GENERATED = "ai_summary_generated", "AI Summary Generated"
+        FLAG_TOGGLED = "flag_toggled", "Flag Toggled"
+        DUE_DATE_SET = "due_date_set", "Due Date Set"
+
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="activities")
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="request_activities")
+    actor = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name="activities")
+    actor_source = models.CharField(max_length=20, choices=ActorSource.choices)
+    event_type = models.CharField(max_length=50, choices=EventType.choices)
+    description = models.TextField()
+    metadata = models.JSONField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "request_activities"
+        indexes = [
+            models.Index(fields=["request"],name="idx_req_activities_request_id"),
+            models.Index(fields=["tenant"], name="idx_req_activities_tenant_id"),
+            models.Index(fields=["event_type"], name="idx_req_activities_event_type"),
+            models.Index(fields=["request", "created_at"], name="idx_req_activities_req_tl"),
+            models.Index(fields=["tenant",  "created_at"], name="idx_req_activities_tenant_tl"),
+        ]
+ 
+    def __str__(self):
+        return f"{self.event_type} on {self.request_id}"
+ 
