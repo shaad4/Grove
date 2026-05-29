@@ -98,5 +98,29 @@ class RequestActivity(models.Model):
         ]
  
     def __str__(self):
-        return f"{self.event_type} on {self.request_id}"
+        return f"{self.event_type} on {self.id}"
+    
+class InternalNote(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="internal_notes")
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="internal_notes")
+    user = models.ForeignKey(User,on_delete=models.CASCADE, related_name="internal_notes")
+    content = models.TextField()
+    is_ai_generated = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
  
+    class Meta:
+        db_table = "internal_notes"
+        indexes = [
+            models.Index(fields=["request"], name="idx_internal_notes_request_id"),
+            models.Index(fields=["tenant"], name="idx_internal_notes_tenant_id"),
+            models.Index(fields=["user"],  name="idx_internal_notes_user_id"),
+            models.Index(fields=["request", "is_ai_generated"],name="idx_internal_notes_req_ai"),
+        ]
+ 
+    def __str__(self):
+        return f"Note by {self.user} on {self.id}"
+    
+
+
