@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "apps.plans",
     "apps.tenants",
     "apps.notifications",
+    "apps.request_management",
 
 
 ]
