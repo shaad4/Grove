@@ -124,3 +124,62 @@ class InternalNote(models.Model):
     
 
 
+class Delivery(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    request = models.ForeignKey(Request, on_delete=models.CASCADE, related_name="deliveries")
+    tenant = models.ForeignKey(Tenant,  on_delete=models.CASCADE, related_name="deliveries")
+    created_by = models.ForeignKey(User,    on_delete=models.CASCADE, related_name="deliveries")
+    message = models.TextField(null=True, blank=True)
+    links = models.JSONField(null=True, blank=True)  # [{"label": "Figma", "url": "..."}]
+    delivery_number = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        db_table = "deliveries"
+        indexes = [
+            models.Index(fields=["request"],                    name="idx_deliveries_request_id"),
+            models.Index(fields=["tenant"],                     name="idx_deliveries_tenant_id"),
+            models.Index(fields=["created_by"],                 name="idx_deliveries_created_by_id"),
+            models.Index(fields=["request", "delivery_number"], name="idx_deliveries_req_number"),
+        ]
+ 
+    def __str__(self):
+        return f"Delivery #{self.delivery_number} for {self.id}"
+    
+
+
+class File(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant,   on_delete=models.CASCADE, related_name="files")
+    request = models.ForeignKey(Request,  on_delete=models.CASCADE, related_name="files")
+    delivery = models.ForeignKey(Delivery, on_delete=models.SET_NULL, null=True, blank=True, related_name="files")
+    uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="uploaded_files")
+ 
+    file_name = models.CharField(max_length=500)
+    file_url = models.TextField()           # S3 permanent URL
+    file_size_bytes = models.BigIntegerField()
+    file_type = models.CharField(max_length=100)   # MIME type
+    file_extension = models.CharField(max_length=20)
+ 
+    is_delivery_file = models.BooleanField(default=False)
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+ 
+    created_at = models.DateTimeField(auto_now_add=True)
+ 
+    class Meta:
+        db_table = "files"
+        indexes = [
+            models.Index(fields=["tenant"], name="idx_files_tenant_id"),
+            models.Index(fields=["request"], name="idx_files_request_id"),
+            models.Index(fields=["uploaded_by"], name="idx_files_uploaded_by_id"),
+            models.Index(fields=["request", "is_delivery_file"],  name="idx_files_request_delivery"),
+            models.Index(fields=["is_deleted"], name="idx_files_deleted"),
+        ]
+ 
+    def __str__(self):
+        return f"{self.file_name} ({self.id})"
+ 
+ 
+    
+
