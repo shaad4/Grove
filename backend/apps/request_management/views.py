@@ -208,3 +208,33 @@ class RequestDetailView(APIView):
 
         return Response({"success": True, "message": "Request updated.", "data": RequestDetailSerializer(req).data})
 
+
+#Status update API - provider only
+
+class RequestStatusView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, request_id):
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+
+        serializer = UpdateStatusSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            req = RequestService.update_status(
+                request_id=request_id,
+                tenant=request.tenant,
+                actor=request.user,
+                new_status=serializer.validated_data["status"],
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+        except ForbiddenStatusTransition as e:
+            return Response({"success": False, "message": str(e)}, status=409)
+
+        return Response({
+            "success": True,
+            "message": f"Status updated to '{req.status}'.",
+            "data": RequestDetailSerializer(req).data,
+        })
