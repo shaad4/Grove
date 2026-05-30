@@ -152,3 +152,59 @@ class RequestListCreateView(APIView):
             "message": "Request submitted.",
             "data": RequestDetailSerializer(req).data,
         }, status=status.HTTP_201_CREATED)
+    
+
+
+# Request Detail API
+class RequestDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_request_for_user(self, request, request_id):
+        tenant = request.tenant
+        if _is_provider(request):
+            return RequestRepository.get_by_id(request_id, tenant.id)
+        elif _is_client(request):
+            client =_get_client_profile(request)
+            if not client:
+                return None
+            return RequestRepository.get_by_id_for_client(request_id, tenant.id, client.id)
+        return None
+    
+    def get(self, request, request_id):
+        req = self._get_request_for_user(request, request_id)
+
+        if not req:
+            return Response({"success": False, "message": "Request not found."}, status=404)
+        
+        return Response({"success": True, "data": RequestDetailSerializer(req).data})
+    
+    def patch(self, request, request_id):
+        """Client edits their own request (title/description, only while received)."""
+
+        if not _is_client(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        client = _get_client_profile(request)
+        if not client:
+            return Response({"success": False, "message": "Client profile not found."}, status=404)
+
+
+        serializer = UpdateRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            req = RequestService.edit_request(
+                request_id=request_id,
+                tenant=request.tenant,
+                client_id=client.id,
+                title=serializer.validated_data.get("title"),
+                description=serializer.validated_data.get("description"),
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+        except RequestNotEditable as e:
+            return Response({"success": False, "message": str(e)}, status=409)
+
+
+        return Response({"success": True, "message": "Request updated.", "data": RequestDetailSerializer(req).data})
+
