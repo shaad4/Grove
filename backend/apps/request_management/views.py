@@ -238,3 +238,30 @@ class RequestStatusView(APIView):
             "message": f"Status updated to '{req.status}'.",
             "data": RequestDetailSerializer(req).data,
         })
+    
+
+# urgent flag API - provider only
+class RequestFlagView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, request_id):
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        serializer = SetUrgentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            req = RequestService.set_urgent(
+                request_id=request_id,
+                tenant=request.tenant,
+                actor=request.user,
+                is_urgent=serializer.validated_data["is_urgent"],
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+ 
+        return Response({"success": True, "message": "Request flag updated.", "data": {"is_urgent": req.is_urgent}})
+
+
+            

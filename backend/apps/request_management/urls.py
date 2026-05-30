@@ -3,6 +3,7 @@ from .views import (
     RequestListCreateView,
     RequestDetailView,
     RequestStatusView,
+    RequestFlagView,
 
 )
 
@@ -11,4 +12,7 @@ urlpatterns = [
     path("", RequestListCreateView.as_view(), name="request-list-create"),
     path("<uuid:request_id>/", RequestDetailView.as_view(), name="request-detail"),
     path("<uuid:request_id>/status/", RequestStatusView.as_view(), name="request-status"),
+    path("<uuid:request_id>/flag/", RequestFlagView.as_view(), name="request-flag"),
+    # path("<uuid:request_id>/due-date/", RequestDueDateView.as_view(), name="request-due-date"),
+ 
 ]
