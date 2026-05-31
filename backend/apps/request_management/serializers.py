@@ -47,7 +47,7 @@ class RequestActivitySerializer(serializers.ModelSerializer):
         return obj.actor.display_name if obj.actor else "System"
 
 
-class InternalNoteSerializer(serializers.Serializer):
+class InternalNoteSerializer(serializers.ModelSerializer):
     author_name = serializers.SerializerMethodField()
 
     class Meta:

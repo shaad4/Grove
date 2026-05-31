@@ -321,3 +321,45 @@ class RequestActivityView(APIView):
             "success": True,
             "data": RequestActivitySerializer(activities, many=True).data,
         })
+
+
+#Internal Notes API - Provider 
+
+class InternalNoteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id):
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        req = RequestRepository.get_by_id(request_id, request.tenant.id)
+
+        if not req:
+            return Response({"success": False, "message": "Request not found."}, status=404)
+        
+        notes = InternalNoteRepository.get_for_request(request_id, request.tenant.id)
+        return Response({"success": True, "data": InternalNoteSerializer(notes, many=True).data})
+    
+
+    def post(self, request, request_id):
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        serializer = AddNoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            note = RequestService.add_internal_note(
+                request_id=request_id,
+                tenant=request.tenant,
+                user=request.user,
+                content=serializer.validated_data["content"],
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+        
+        return Response({
+            "success": True,
+            "message": "Note added.",
+            "data": InternalNoteSerializer(note).data,
+        }, status=status.HTTP_201_CREATED)
