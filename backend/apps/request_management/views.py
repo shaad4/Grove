@@ -290,3 +290,34 @@ class RequestDueDateView(APIView):
         
         return Response({"success": True, "message": "Due date updated.", "data": {"due_date": req.due_date}})
         
+
+#Activit Log API 
+
+class RequestActivityView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id):
+        tenant = request.tenant
+
+        if _is_client(request):
+            client = _get_client_profile(request)
+            if not client:
+                return Response({"success": False, "message": "Client profile not found."}, status=404)
+            
+            req = RequestRepository.get_by_id_for_client(request_id, tenant.id, client.id)
+
+        elif _is_provider(request):
+            req = RequestRepository.get_by_id(request_id, tenant.id)
+
+        else:
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+
+        if not req:
+            return Response({"success": False, "message": "Request not found."}, status=404)
+        
+        activities = RequestActivityRepository.get_for_request(request_id, tenant.id)
+        return Response({
+            "success": True,
+            "data": RequestActivitySerializer(activities, many=True).data,
+        })
