@@ -265,3 +265,28 @@ class RequestFlagView(APIView):
 
 
             
+
+#Due Date API - provider
+
+class RequestDueDateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, request_id):
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        serializer = SetDueDateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            req = RequestService.set_due_date(
+                request_id=request_id,
+                tenant=request.tenant,
+                actor=request.user,
+                due_date=serializer.validated_data["due_date"],
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+        
+        return Response({"success": True, "message": "Due date updated.", "data": {"due_date": req.due_date}})
+        
