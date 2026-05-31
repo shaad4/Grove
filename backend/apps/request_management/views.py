@@ -363,3 +363,67 @@ class InternalNoteView(APIView):
             "message": "Note added.",
             "data": InternalNoteSerializer(note).data,
         }, status=status.HTTP_201_CREATED)
+    
+
+# delivery API 
+
+
+class DeliveryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id):
+        tenant = request.tenant
+
+        if _is_client(request):
+            client = _get_client_profile(request)
+
+            if not client:
+                return Response({"success": False, "message": "Client profile not found."}, status=404)
+            
+            req = RequestRepository.get_by_id_for_client(request_id, tenant.id, client.id)
+        
+        elif _is_provider(request):
+            req = RequestRepository.get_by_id(request_id, tenant.id)
+
+        else:
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        if not req:
+            return Response({"success": False, "message": "Request not found."}, status=404)
+        
+        deliveries = DeliveryRepository.get_for_request(request_id)
+
+        return Response({"success": True, "data": DeliverySerializer(deliveries, many=True).data})
+    
+    def post(self, request, request_id):
+        """Provider creates a delivery."""
+
+        if not _is_provider(request):
+            return Response({"success": False, "message": "Forbidden."}, status=403)
+        
+        serializer = CreateDeliverySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            delivery = RequestService.create_delivery(
+                request_id=request_id,
+                tenant=request.tenant,
+                provider=request.user,
+                message=serializer.validated_data.get("message"),
+                links=serializer.validated_data.get("links"),
+                file_ids=serializer.validated_data.get("file_ids"),
+            )
+        except RequestNotFound as e:
+            return Response({"success": False, "message": str(e)}, status=404)
+        
+
+        return Response({
+            "success": True,
+            "message": "Delivery created.",
+            "data": DeliverySerializer(delivery).data,
+        }, status=status.HTTP_201_CREATED)
+        
+
+
+
+

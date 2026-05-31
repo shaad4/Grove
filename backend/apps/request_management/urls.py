@@ -7,6 +7,7 @@ from .views import (
     RequestDueDateView,
     RequestActivityView,
     InternalNoteView,
+    DeliveryView,
 
 )
 
@@ -20,5 +21,8 @@ urlpatterns = [
  
     path("<uuid:request_id>/activity/", RequestActivityView.as_view(),   name="request-activity"),
 
-    path("<uuid:request_id>/notes/", InternalNoteView.as_view(),      name="request-notes"),
+    path("<uuid:request_id>/notes/", InternalNoteView.as_view(), name="request-notes"),
+
+    path("<uuid:request_id>/deliveries/", DeliveryView.as_view(), name="request-deliveries"),
+
 ]
